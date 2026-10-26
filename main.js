@@ -104,7 +104,7 @@ function resizeCanvasToScreen(){
   const sideBySide = vw > 900 || landscapePhone;     // painel ao lado do jogo
   const wrap = document.getElementById("wrap"), panel = document.getElementById("panel");
   const top = wrap.getBoundingClientRect().top + window.scrollY;
-  const pad = 14, gap = 16;
+  const pad = vw<=900 ? 4 : 14, gap = 16;   // menos margem no telemóvel: jogo maior
 
   let availW, availH;
   if(sideBySide){
@@ -539,7 +539,7 @@ function setupLevel(keepScore=true){
   stepMs = Math.max(110, Math.round(BASE_STEP_MS*speedFactor - (level-1)*8));
 // firewall aparece mais cedo em níveis altos
   firewallSpawnAt = Date.now() + Math.max(2500, 6500 - (level-1)*600);
-  updateMission(); toast("🤖 VanBerto's — Nível "+level, 1600);
+  updateMission(); toast("VanBerto's — Nível "+level, 1600);
 }
 
 // ---------- MOVIMENTO ----------
@@ -557,13 +557,13 @@ function movePac(){
   pac.x=mx; pac.y=my;
 
   if(map[my][mx]===2){
-    map[my][mx]=0; score+=10; sPatch(); munchUntil=Date.now()+260;
+    map[my][mx]=0; score+=10; sPatch(); munchUntil=Date.now()+260; mascotEvent("patch");
     chipsEatenThisLevel++;
     if(!bonusOnMap && chipsEatenThisLevel>0 && chipsEatenThisLevel%45===0) spawnBonus();
   }
   if(map[my][mx]===4){
     map[my][mx]=0; bonusOnMap=false;
-    score += BONUS_POINTS; joyUntil=Date.now()+1000;
+    score += BONUS_POINTS; joyUntil=Date.now()+1000; mascotEvent("bonus");
     toast(`⭐ +${BONUS_POINTS}`, 900);
     spawnParticles(mx*TILE+TILE/2, my*TILE+TILE/2, 14);
     sCoin();
@@ -571,7 +571,7 @@ function movePac(){
   if(map[my][mx]===5){
     map[my][mx]=0; heartOnMap=false;
     if(lives<MAX_LIVES) lives++;
-    joyUntil=Date.now()+1000;
+    joyUntil=Date.now()+1000; mascotEvent("heart");
     score += HEART_POINTS;
     toast(`❤️ +1 vida`, 900);
     spawnParticles(mx*TILE+TILE/2, my*TILE+TILE/2, 16);
@@ -584,7 +584,7 @@ function movePac(){
     setStatus("🛡️ Firewall ativada! Come os malware azuis!");
     toast("🛡️ Proteção ativada!");
     scareUntil = Date.now() + 1400;
-    powerFlashUntil = Date.now() + 900;
+    powerFlashUntil = Date.now() + 900; mascotEvent("shield");
     ghosts.forEach(g=>{ if(!g.eaten) g.scared=true; });
     sPower();
   }
@@ -681,12 +681,12 @@ function collide(){
     if(g.scared){
       // malware assustado: o VanBerto's come-o! 200, 400, 800, 1600…
       ghostCombo=Math.min(1600,ghostCombo*2);
-      score+=ghostCombo; sEat(); joyUntil=Date.now()+800;
+      score+=ghostCombo; sEat(); joyUntil=Date.now()+800; mascotEvent("eat");
       toast("👻 +"+ghostCombo,800);
       spawnParticles(g.x*TILE+TILE/2, g.y*TILE+TILE/2, 18);
       g.scared=false; g.eaten=true;
     }else{
-      lives--; hurtUntil=Date.now()+1300; sHurt(); clampHUD();
+      lives--; hurtUntil=Date.now()+1300; sHurt(); clampHUD(); if(lives>0) mascotEvent("hurt");
       if(lives<=0){ endGame(); return; }
       resetAfterHit();
       return;
@@ -728,9 +728,10 @@ function cVan(ctx,x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
 function cfVan(ctx,x,y,r,color){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
 function lVan(ctx,x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
 
-function makeVanBertoCanvas(blink,step,armsUp){
-  const w=96,h=96, cv=document.createElement("canvas"); cv.width=w; cv.height=h; const ctx=cv.getContext("2d");
-  ctx.clearRect(0,0,w,h);
+function makeVanBertoCanvas(blink,step,armsUp,S=1){
+  const w=96,h=96, cv=document.createElement("canvas"); cv.width=w*S; cv.height=h*S; const ctx=cv.getContext("2d");
+  ctx.clearRect(0,0,w*S,h*S);
+  ctx.scale(S,S);
   ctx.lineJoin="round"; ctx.lineCap="round";
   // Desloca todo o desenho 6px para baixo para o halo da antena (y≈0) não ser cortado.
   // O setOffset do corpo físico foi ajustado em igual medida para o robô ficar na mesma posição no ecrã.
@@ -1507,7 +1508,7 @@ function loop(){
     if(level>=10){ sLevel(); draw(); showWin(); return; }
     level++;
     setStatus("🚀 Nível " + level + " — pergunta de segurança!");
-    sLevel();
+    sLevel(); mascotEvent("level");
 
     // pausa e pergunta antes de continuar
     const qObj = pickQuestion(level);
@@ -1528,7 +1529,7 @@ function loop(){
 function endGame(){
   running=false; paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
-  sOver(); saveBest();
+  sOver(); saveBest(); mascotEvent("over");
   $("goMsg").textContent=(playerName||"Jogador")+", o VanBerto's foi infetado!";
   $("finalScore").textContent = score;
   $("finalLevel").textContent = level;
@@ -1536,6 +1537,7 @@ function endGame(){
 }
 
 function hardReset(){
+  mascotEvent("start");
   missedQs=[];
   score=0; level=1;
   lives = easyMode ? 5 : 3;
@@ -1804,8 +1806,171 @@ $("resetBtn").addEventListener("click", ()=>{
   showOver(false);
   buildMap();
 showStart(true);
-  setStatus("");
+  setStatus(""); mascotEvent("idle");
 });
+
+// ---------- MASCOTE (painel lateral): o VanBerto's grande a reagir ao jogo ----------
+let MT={}, MT_S=0;
+function mascotTex(key){
+  const S=MASC.S||4;
+  if(MT_S!==S){ MT={}; MT_S=S; }
+  if(MT[key]) return MT[key];
+  const m={open:[false,-1],blink:[true,-1],wink:["wink",-1],happy:["happy",-1],sad:["sad",-1],walk1:[false,0],walk2:[false,1],cheer:["happy",-1,true],catch:[false,-1,true]};
+  const p=m[key]||m.open;
+  return (MT[key]=makeVanBertoCanvas(p[0],p[1],!!p[2],S));
+}
+const MASC={box:$("mascot"),stage:$("mascotStage"),cv:$("mascotCv"),say:$("mascotSay"),
+  w:0, h:0, S:4, hopAt:0, catchAt:0, shakeUntil:0, cheerUntil:0, sadUntil:0, sayUntil:0, items:[], sparks:[], count:0};
+const REDUCE_MOTION=!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+const pickOne=(a)=>a[Math.floor(Math.random()*a.length)];
+
+function mascotResize(){
+  if(!MASC.box||!MASC.cv) return;
+  const w=Math.floor(MASC.box.clientWidth);
+  const h=Math.min(Math.floor(MASC.box.clientHeight), Math.floor(w*1.5));
+  const ok = w>=90 && h>=90;                 // sem espaço (ecrãs pequenos): não desenha
+  MASC.w=ok?w:0; MASC.h=ok?h:0;
+  MASC.stage.style.display = ok ? "" : "none";
+  if(!ok) return;
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  MASC.stage.style.width=w+"px"; MASC.stage.style.height=h+"px";
+  MASC.stage.style.fontSize=Math.max(11,Math.round(w*0.05))+"px";
+  MASC.cv.width=Math.round(w*dpr); MASC.cv.height=Math.round(h*dpr);
+  const dpx=Math.min(w*1.2,h*0.92)*dpr;      // tamanho do robô em pixéis reais
+  MASC.S=Math.min(8,Math.max(3,Math.ceil(dpx/96)));
+}
+if(window.ResizeObserver && MASC.box) new ResizeObserver(mascotResize).observe(MASC.box);
+window.addEventListener("resize", mascotResize);
+mascotResize();
+
+function mascotSay(txt, ms=1600){
+  if(!MASC.say) return;
+  MASC.say.textContent=txt; MASC.say.classList.add("show");
+  MASC.sayUntil=Date.now()+ms;
+}
+function mascotCheer(ms){ MASC.cheerUntil=Date.now()+ms; }
+function mascotEvent(type){
+  if(!MASC.cv) return;
+  const now=Date.now();
+  switch(type){
+    case "patch":
+      MASC.count++;
+      MASC.items.push({t0:performance.now(), x:(Math.random()*2-1)*0.55, dur:480, spin:(Math.random()*2-1)*3});
+      if(MASC.count%30===0) mascotSay(pickOne(["Falha tapada! 🔧","Mais uma atualização!","Sistema mais seguro!"]),1500);
+      break;
+    case "bonus":  mascotCheer(900);  mascotSay("⭐ Estrela!",1200); break;
+    case "heart":  mascotCheer(1000); mascotSay("❤️ Mais uma vida!",1500); break;
+    case "shield": mascotCheer(1200); mascotSay("🛡️ Firewall ativa!",1800); break;
+    case "eat":    mascotCheer(800);  mascotSay(pickOne(["Apanhei-te, malware!","Fora daqui! 🦠"]),1400); break;
+    case "hurt":
+      MASC.sadUntil=now+1300; MASC.shakeUntil=now+600;
+      mascotSay(pickOne(["Ai! Fui infetado!","Cuidado com o malware!"]),1500); break;
+    case "level":  mascotCheer(1600); mascotSay("Nível "+level+"! 🚀",1800); break;
+    case "win":    mascotCheer(8000); mascotSay("Missão cumprida! 🏆",5000); break;
+    case "over":   MASC.sadUntil=now+600000; MASC.shakeUntil=now+600; mascotSay("Oh não… tenta outra vez!",4000); break;
+    case "start":  MASC.sadUntil=0; MASC.cheerUntil=0; MASC.items.length=0; MASC.sparks.length=0; MASC.count=0; MASC.hopAt=now; mascotSay("Vamos a isso!",1600); break;
+    case "idle":   MASC.sadUntil=0; MASC.cheerUntil=0; MASC.items.length=0; MASC.sparks.length=0; MASC.sayUntil=1; break;
+  }
+}
+
+function drawMascot(){
+  if(!MASC.w) return;
+  const cv=MASC.cv, g=cv.getContext("2d"), W=cv.width, H=cv.height;
+  const now=Date.now(), t=performance.now();
+  g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,H);
+  if(MASC.sayUntil && now>MASC.sayUntil){ MASC.say.classList.remove("show"); MASC.sayUntil=0; }
+
+  // expressão: com patches a cair levanta os braços para os apanhar
+  const moving=running && !paused && (pac.px!==pac.x || pac.py!==pac.y);
+  const catching = MASC.items.length>0 || (now-MASC.catchAt)<320;
+  let key="open";
+  if(now<MASC.sadUntil) key="sad";
+  else if(now<MASC.cheerUntil) key="cheer";
+  else if(catching) key="catch";
+  else{
+    const cyc=Math.floor(t/3300), ph=t%3300, isWink=(cyc%3===0);
+    if(ph<(isWink?240:130)) key=isWink?"wink":"blink";
+    else if(moving) key=(Math.floor(t/140)%2===0)?"walk1":"walk2";
+  }
+
+  // tamanho/posição: o robô ocupa o máximo possível (encostado ao fundo)
+  const d=Math.min(W*1.2, H*0.92), x0=(W-d)/2, yBase=H-d-H*0.01;
+  let dy=Math.sin(t/420)*d*0.005, dx=0, air=0;
+  if(!REDUCE_MOTION){
+    if(now<MASC.cheerUntil) air=Math.abs(Math.sin(t/170))*d*0.06;
+    const hp=(now-MASC.hopAt)/260;
+    if(hp>=0 && hp<1) air=Math.max(air, Math.sin(Math.PI*hp)*d*0.04);
+    if(now<MASC.shakeUntil) dx=Math.sin(t/32)*d*0.018*((MASC.shakeUntil-now)/600);
+  }
+  dy-=air;
+  const cx=W/2+dx, cyRing=yBase+dy+d*0.52, cyChest=yBase+dy+d*0.65;
+
+  // sombra no chão
+  g.fillStyle="rgba(0,0,0,0.35)";
+  g.beginPath(); g.ellipse(cx, H-d*0.03, d*0.22*(1-air/d*3), d*0.035, 0, 0, Math.PI*2); g.fill();
+
+  // escudo (Firewall): halo + arco com o tempo que falta
+  if(power){
+    const pulse=0.55+Math.sin(t*0.004)*0.45;
+    const pct=Math.max(0,Math.min(1,(powerEnd-now)/POWER_TIME));
+    g.save();
+    g.fillStyle="rgba(68,136,255,"+(0.10+0.08*pulse)+")";
+    g.beginPath(); g.arc(cx,cyRing,d*0.60,0,Math.PI*2); g.fill();
+    g.lineWidth=d*0.012; g.strokeStyle="rgba(136,204,255,"+(0.45+0.4*pulse)+")";
+    g.beginPath(); g.arc(cx,cyRing,d*(0.62+0.02*pulse),0,Math.PI*2); g.stroke();
+    g.lineCap="round"; g.lineWidth=d*0.024;
+    g.strokeStyle = pct>0.5?"#2266ff":(pct>0.25?"#55aaff":"#ff4400");
+    g.beginPath(); g.arc(cx,cyRing,d*0.68,-Math.PI/2,-Math.PI/2+Math.PI*2*pct); g.stroke();
+    g.restore();
+  }
+
+  // robô
+  g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
+  g.drawImage(mascotTex(key), x0+dx, yBase+dy, d, d);
+
+  // patches a cair, a rodar, e a serem apanhados (com faíscas)
+  if(MASC.items.length && allAssetsLoaded()){
+    const img=tinted("p",ASSETS.patch,patchHue()), ps=d*0.17;
+    const yStart=Math.max(0, yBase-d*0.02);
+    MASC.items=MASC.items.filter(it=>{
+      const p=(t-it.t0)/it.dur;
+      if(p>=1){
+        MASC.hopAt=now; MASC.catchAt=now;
+        for(let i=0;i<7;i++){ const a=Math.random()*Math.PI*2, v=0.04+Math.random()*0.07;
+          MASC.sparks.push({x:cx, y:cyChest, vx:Math.cos(a)*v*d, vy:Math.sin(a)*v*d-0.03*d, t0:t, life:380+Math.random()*200, c:Math.random()<0.5?"#ffa733":"#ec1e79"}); }
+        return false;
+      }
+      const e=p*p;
+      const px=cx+it.x*d*(1-e), py=yStart+(cyChest-yStart)*e;
+      const s=ps*(1-0.55*e);
+      g.save(); g.translate(px,py); g.rotate(it.spin*p);
+      g.drawImage(img,-s/2,-s/2,s,s); g.restore();
+      return true;
+    });
+  }
+  if(MASC.sparks.length){
+    MASC.sparks=MASC.sparks.filter(s=>(t-s.t0)<s.life);
+    for(const s of MASC.sparks){
+      const a=(t-s.t0)/s.life, k=(t-s.t0)/16;
+      g.globalAlpha=1-a; g.fillStyle=s.c;
+      g.beginPath(); g.arc(s.x+s.vx*k, s.y+s.vy*k, d*0.012*(1-a*0.5)+1, 0, Math.PI*2); g.fill();
+    }
+    g.globalAlpha=1;
+  }
+
+  // contador de patches do nível (canto inferior esquerdo)
+  if(running){
+    const done=chipsEatenThisLevel, total=done+remainingPatches();
+    const pulse=1+0.25*Math.max(0,1-(now-MASC.catchAt)/220);
+    const fs=Math.round(d*0.062*pulse);
+    g.font="800 "+fs+"px 'Baloo 2','Nunito',sans-serif"; g.textBaseline="middle"; g.textAlign="left";
+    const txt="🧩 "+done+"/"+total, tw=g.measureText(txt).width, ph=fs*1.5, pw=tw+fs*1.1;
+    const bx=W*0.03, by=H-ph-d*0.02;
+    g.fillStyle="rgba(15,5,37,0.78)"; g.strokeStyle="#ec1e79"; g.lineWidth=Math.max(1.5,d*0.007);
+    g.beginPath(); g.roundRect ? g.roundRect(bx,by,pw,ph,ph/2) : g.rect(bx,by,pw,ph); g.fill(); g.stroke();
+    g.fillStyle="#ffe9c4"; g.fillText(txt,bx+fs*0.55,by+ph/2+1);
+  }
+}
 
 // ---------- arranque ----------
 // ---------- mostrar o primeiro ecrã ----------
@@ -1814,12 +1979,14 @@ bootIntro();
 if(!map.length) buildMap();
 (function warmup(){
   draw();
+  drawMascot();
   requestAnimationFrame(warmup);
 })();
 
 
 /* ========= VITÓRIA (nível 10) ========= */
 function showWin(){
+  mascotEvent("win");
   running=false;
   paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
@@ -1878,8 +2045,11 @@ function filterQuestions(list){
 function toggleFullscreen(){
   const el = document.documentElement;
   if(!document.fullscreenElement){
-    el.requestFullscreen?.();
+    const r = el.requestFullscreen?.();
+    // no telemóvel, em ecrã inteiro, põe na horizontal (o labirinto é largo)
+    if(r && r.then) r.then(()=>{ try{ if(matchMedia("(pointer:coarse)").matches) screen.orientation?.lock?.("landscape")?.catch(()=>{}); }catch(e){} }).catch(()=>{});
   }else{
+    try{ screen.orientation?.unlock?.(); }catch(e){}
     document.exitFullscreen?.();
   }
   setTimeout(onResize, 250);

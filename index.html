@@ -19,7 +19,6 @@
 <body>
   <div class="retro">
     <h1>VanBerto's – Missão Internet Segura</h1>
-    <p>Professora: <strong>Vanda Várzea</strong></p>
 
     <div id="wrap">
       <div class="canvasWrap">
@@ -33,7 +32,8 @@
             </div>
             <div class="factBody">
               <ul class="howList">
-                <li>🤖 <b>Guia o VanBerto's</b> pelo labirinto: setas ou W A S D no computador; no telemóvel, desliza no ecrã ou usa os botões.</li>
+                <li><b>Guia o VanBerto's</b> pelo labirinto: setas ou W A S D no computador; no telemóvel, desliza no ecrã ou usa os botões.</li>
+                <li>🧩 <b>O que é um patch?</b> É uma <b>atualização de segurança</b>: um “remendo” que tapa uma falha num programa, por onde o malware podia entrar. Cada patch que apanhas fecha uma falha!</li>
                 <li>🟨 <b>Apanha todos os patches</b> (os quadradinhos) para passares de nível. São 10 níveis!</li>
                 <li>🦠 <b>Foge dos malware!</b> Se te apanharem, perdes uma vida ❤️.</li>
                 <li>🛡️ <b>Apanha o escudo</b>: os malware ficam azuis e podes comê-los! Quantos mais comeres seguidos, mais pontos (200, 400, 800, 1600).</li>
@@ -63,10 +63,10 @@
         <div id="overlayStart" class="overlay">
           <div class="factCard">
             <div class="factHeader">
-              <div class="factTitle">🤖 <span>Missão Internet Segura</span></div>
+              <div class="factTitle"><span>Missão Internet Segura</span></div>
             </div>
             <div class="factBody">
-              <div class="factText">Apanha os patches, foge dos malware e responde às perguntas de segurança. Vamos a isso?</div>
+              <div class="factText">Apanha os patches (atualizações de segurança que tapam falhas), foge dos malware e responde às perguntas de segurança. Vamos a isso?</div>
               <button id="btnStart" class="factBtn">▶ Começar</button>
             </div>
           </div>
@@ -131,6 +131,7 @@
         <p>🏆 Recorde: <span id="best">0</span></p>
         <p>❤️ Vidas: <span id="lives">❤️❤️❤️</span></p>
         <p id="status"></p>
+        <div class="rotateHint">📱 Dica: põe o telemóvel na horizontal para o jogo ficar maior.</div>
 
         <div class="powerLabel">👩‍🏫 Tema das perguntas</div>
         <select id="themeSel"><option value="todos">Todos</option><option value="passwords">Palavras-passe</option><option value="phishing">Phishing</option><option value="privacidade">Privacidade</option></select>
@@ -148,6 +149,16 @@
           </div>
           <div class="hint small">Sugestão: também podes deslizar no ecrã do jogo</div>
         </div>
+
+        <!-- VanBerto's grande, a reagir ao jogo -->
+        <div id="mascot" aria-hidden="true">
+          <div id="mascotStage">
+            <canvas id="mascotCv"></canvas>
+            <div id="mascotSay"></div>
+          </div>
+        </div>
+
+        <div class="credit">© Prof.ª Vanda Várzea</div>
       </div>
     </div>
   </div>

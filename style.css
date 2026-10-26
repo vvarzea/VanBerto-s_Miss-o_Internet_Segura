@@ -28,7 +28,7 @@ h1,p{text-align:center;color:#e5e7eb;margin:6px}
   justify-content:center;
   align-items:stretch;
   flex-wrap:nowrap;
-  height:calc(100vh - 120px);
+  height:calc(100vh - 100px);
 }
 
 .canvasWrap{position:relative;}
@@ -308,7 +308,7 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
 /* 100vh falha nos browsers do telemóvel (barra de endereço): usar 100dvh */
 @supports (height:100dvh){
   body{min-height:100dvh}
-  #wrap{height:calc(100dvh - 120px)}
+  #wrap{height:calc(100dvh - 100px)}
 }
 @media (max-width:900px){ #wrap{height:auto !important} }
 @media (max-width:900px) and (orientation:landscape){
@@ -326,3 +326,55 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
   #overlayHow .factTitle{font-size:18px}
 }
 .clickable{cursor:pointer}
+
+/* ===== Mascote VanBerto's + crédito (painel lateral) ===== */
+@media (min-width:901px){
+  #panel{display:flex;flex-direction:column}
+  #panel > *{flex-shrink:0}
+}
+#mascot{position:relative;flex:1 1 0;min-height:0;margin-top:8px}
+#mascotStage{position:absolute;left:50%;bottom:0;transform:translateX(-50%);font:800 13px 'Baloo 2','Nunito',sans-serif}
+#mascotCv{display:block;width:100%;height:100%;pointer-events:none;background:transparent;border:0;border-radius:0;box-shadow:none;margin:0}
+#mascotSay{
+  position:absolute;left:50%;top:0;width:max-content;max-width:92%;
+  padding:.35em .85em;border:2.5px solid #ec1e79;border-radius:14px;
+  background:#fff8e0;color:#241143;text-align:center;line-height:1.15;
+  box-shadow:3px 3px 0 #0a0520;
+  opacity:0;transform:translate(-50%,-4px) scale(.92);transition:opacity .18s ease,transform .18s ease;pointer-events:none;
+}
+#mascotSay::after{
+  content:"";position:absolute;left:50%;bottom:-9px;width:12px;height:12px;
+  background:#fff8e0;border:2.5px solid #ec1e79;border-top:none;border-left:none;
+  transform:translateX(-50%) rotate(45deg);
+}
+#mascotSay.show{opacity:1;transform:translate(-50%,0) scale(1)}
+.credit{
+  margin-top:6px;padding-top:6px;border-top:1px solid rgba(236,30,121,.35);
+  text-align:center;font:800 13px 'Baloo 2','Nunito',sans-serif;letter-spacing:.3px;color:#ffa733;user-select:none;
+}
+@media (max-width:900px){
+  #mascot{display:none}
+  #panel .credit{flex:1 1 100%;margin-top:2px}
+}
+
+/* ===== Telemóvel: jogo maior, teclas e botões mais pequenos ===== */
+.rotateHint{display:none}
+@media (max-width:900px){
+  .retro{padding:3px}
+  #wrap{gap:4px}
+  h1{font-size:clamp(13px,3.8vw,18px);margin:1px 0}
+  #panel{padding:6px;gap:4px}
+  #panel button{padding:5px 4px;font-size:11px;border-width:2px;box-shadow:2px 2px 0 #0a0520;border-radius:8px}
+  #panel > p{font-size:12px}
+  #panel select{padding:4px;font-size:12px;margin-bottom:0}
+  #panel .mobilePad{margin-top:2px}
+  #panel .mobilePad .row{gap:6px;margin-bottom:6px}
+  #panel .mobilePad .dpad{width:58px;height:44px;font-size:18px;border-radius:10px;border-width:2px}
+}
+@media (max-width:900px) and (orientation:portrait){
+  .rotateHint{display:block;flex:1 1 100%;text-align:center;font-size:11px;color:#FFB3D1}
+}
+@media (max-width:900px) and (orientation:landscape){
+  #panel .mobilePad .dpad{width:52px;height:38px;font-size:16px}
+  #panel .mobilePad .row{margin-bottom:4px}
+}
