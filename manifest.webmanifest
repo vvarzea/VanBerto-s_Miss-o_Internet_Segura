@@ -1,0 +1,37 @@
+{
+  "id": "./index.html",
+  "name": "VanBerto's – Missão Internet Segura",
+  "short_name": "VanBerto's",
+  "description": "Jogo educativo do VanBerto's com perguntas de cibersegurança",
+  "lang": "pt-PT",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#241143",
+  "theme_color": "#241143",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": [
+    "education",
+    "games"
+  ]
+}

@@ -3,22 +3,45 @@ const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled=false;
 
-const ASSETS = {
-  robot: new Image(),
-  malware: new Image(),
-  patch: new Image(),
-  shield: new Image(),
-  wall: new Image(),
-};
-
-ASSETS.robot.src = "assets/robot_sheet.png";
-ASSETS.malware.src = "assets/malware_sheet.png";
-ASSETS.patch.src = "assets/patch.png";
-ASSETS.shield.src = "assets/shield.png";
-ASSETS.wall.src = "assets/wall.png";
-
+// Imagens embutidas (não dependem de pasta assets nem da cache)
+const WALL_SRC="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAcElEQVR4nGOUc1j/n4GGgOXz870MWtFdNDH88b6dDCzIHGzg8/O9DLySzjgNwSUv6+TOwMDAgLDg8/O9eA3BB7DLo1mAy5Xk+gAGmPA6jQpg1AKCYDQVEQSjFhAEo6mIIBi1gCCgXyqiVcXPSOtmCwD6AEfVZi03xQAAAABJRU5ErkJggg==";
+const PATCH_SRC="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAVUlEQVR4nGNgGGjACGMwtRz/T4rGfzWWjAwMDAwsyIJmloZEaT51/DyczYQuedyJneG4EzvRLsEwgIGBgcFy30/yDSBFM04XjBpAZwNQUiJyChs6AABdIA98HAkVowAAAABJRU5ErkJggg==";
+const ASSETS = { wall: new Image(), patch: new Image() };
+ASSETS.wall.src = WALL_SRC;
+ASSETS.patch.src = PATCH_SRC;
+ASSETS.wall.onload = ASSETS.patch.onload = ()=>{ if(window.__vbReady) draw(); };
 function allAssetsLoaded(){
   return Object.values(ASSETS).every(img => img.complete && img.naturalWidth > 0);
+}
+// cores do labirinto (tom de cada nível; sem azuis)
+const WALL_HUES=[320,28,140,275,175,350,48,300,90,10];
+const wallHue=()=>WALL_HUES[(level-1)%WALL_HUES.length];
+const patchHue=()=>Math.abs(wallHue()-45)<40 ? 175 : 45;
+function tintCanvas(src,hue){
+  const c=document.createElement("canvas"); c.width=src.width; c.height=src.height;
+  const g=c.getContext("2d"); g.drawImage(src,0,0);
+  const im=g.getImageData(0,0,c.width,c.height), d=im.data, h=hue/360;
+  const f=(p,q,t)=>{ if(t<0)t+=1; if(t>1)t-=1; return t<1/6?p+(q-p)*6*t : t<1/2?q : t<2/3?p+(q-p)*(2/3-t)*6 : p; };
+  for(let i=0;i<d.length;i+=4){
+    if(!d[i+3]) continue;
+    const r=d[i]/255, gg=d[i+1]/255, b=d[i+2]/255;
+    const mx=Math.max(r,gg,b), mn=Math.min(r,gg,b), l=(mx+mn)/2;
+    let s=0; if(mx!==mn) s=l>0.5 ? (mx-mn)/(2-mx-mn) : (mx-mn)/(mx+mn);
+    s=Math.min(1,s*1.1);
+    const q=l<0.5 ? l*(1+s) : l+s-l*s, p=2*l-q;
+    d[i]=Math.round(f(p,q,h+1/3)*255); d[i+1]=Math.round(f(p,q,h)*255); d[i+2]=Math.round(f(p,q,h-1/3)*255);
+  }
+  g.putImageData(im,0,0); return c;
+}
+function tinted(key,img,hue){ const k=key+hue; return CRISP[k]||(CRISP[k]=tintCanvas(crisp(key,img),hue)); }
+// versão ampliada (pixels nítidos em qualquer tamanho de ecrã)
+const CRISP={};
+function crisp(key,img){
+  if(CRISP[key]) return CRISP[key];
+  const s=8, c=document.createElement("canvas");
+  c.width=img.naturalWidth*s; c.height=img.naturalHeight*s;
+  const g=c.getContext("2d"); g.imageSmoothingEnabled=false; g.drawImage(img,0,0,c.width,c.height);
+  return CRISP[key]=c;
 }
 
 // ================== SOM (RETRO ORIGINAL) ==================
@@ -70,38 +93,44 @@ const sLevel = ()=> { tone(784,90,"square",0.05); tone(988,90,"square",0.05,0.10
 const sOver  = ()=> { tone(523,180,"square",0.05); tone(392,180,"square",0.05,0.18); tone(330,240,"square",0.05,0.36); };
 
 // ================== JOGO ==================
-const TILE=32, COLS=28, ROWS=20;
+const TILE=32, COLS=28, ROWS=19;
 
 function resizeCanvasToScreen(){
   // resolução lógica do jogo
-  const logicalW = COLS*TILE;
-  const logicalH = ROWS*TILE;
-  canvas.width = logicalW;
-  canvas.height = logicalH;
+  const lw = COLS*TILE, lh = ROWS*TILE;
 
-  // espaço disponível (tira cabeçalho/padding e painel)
-  const panel = document.getElementById("panel");
-  const wrap = document.getElementById("wrap");
-  const gap = 16;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const landscapePhone = vw <= 900 && vw > vh;      // telemóvel deitado
+  const sideBySide = vw > 900 || landscapePhone;     // painel ao lado do jogo
+  const wrap = document.getElementById("wrap"), panel = document.getElementById("panel");
+  const top = wrap.getBoundingClientRect().top + window.scrollY;
+  const pad = 14, gap = 16;
 
-  const wrapRect = wrap.getBoundingClientRect();
-  const panelW = (window.innerWidth > 900) ? (panel ? panel.getBoundingClientRect().width : 0) : 0;
-
-  const availW = Math.max(240, window.innerWidth - panelW - gap*3);
-  const availH = Math.max(240, window.innerHeight - 160);
-
-  const scale = Math.min(availW / logicalW, availH / logicalH);
-  canvas.style.width = Math.floor(logicalW * scale) + "px";
-  canvas.style.height = Math.floor(logicalH * scale) + "px";
+  let availW, availH;
+  if(sideBySide){
+    const panelW = panel ? panel.offsetWidth : 0;
+    availW = vw - panelW - gap - pad*2;
+    availH = vh - top - pad;
+  }else{
+    availW = vw - pad*2;
+    availH = vh * 0.62;                               // deixa espaço para os botões por baixo
+  }
+  const scale = Math.max(0.2, Math.min(availW / lw, availH / lh));
+  const cw = Math.floor(lw * scale), ch = Math.floor(lh * scale);
+  canvas.style.width  = cw + "px";
+  canvas.style.height = ch + "px";
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  canvas.width  = Math.max(Math.round(lw/2), Math.round(cw * dpr));
+  canvas.height = Math.max(Math.round(lh/2), Math.round(ch * dpr));
 }
-window.addEventListener("resize", resizeCanvasToScreen);
+function onResize(){ resizeCanvasToScreen(); if(window.__vbReady) draw(); }
+window.addEventListener("resize", onResize);
+window.addEventListener("orientationchange", ()=>setTimeout(onResize,250));
+if(window.ResizeObserver) new ResizeObserver(()=>onResize()).observe(document.getElementById("panel"));
 
 resizeCanvasToScreen();
-// canvas em pixel-art maior
-canvas.width = COLS*TILE;
-canvas.height = ROWS*TILE;
 
-const POWER_TIME=7000;
+const POWER_TIME=8000;
 const POWER_WARNING=2000;
 
 /* ITENS EXTRA (arcade) */
@@ -137,6 +166,7 @@ let firewallSpawnAt=0;
 
 // feedback visual (mensagens rápidas)
 let toastText="", toastUntil=0;
+let munchUntil=0, joyUntil=0, hurtUntil=0;
 let scareUntil=0;      let powerFlashUntil=0; // brilho curto no VanBerto
 
 const pac={x:1,y:15,px:1,py:15,dir:{x:1,y:0},next:{x:1,y:0}};
@@ -161,7 +191,6 @@ const BASE=[
 "1000000010000001000000000001",
 "1011111110110111111111111101",
 "1000000000110000000000000001",
-"1111111111111111111111111111",
 "1111111111111111111111111111"
 ].map(r=>r.split("").map(Number));
 
@@ -175,7 +204,7 @@ function toast(msg, ms=900){
   toastUntil = Date.now() + ms;
 }
 function clampHUD(){
-  $("score").textContent=score;
+  $("score").textContent=score; $("best").textContent=bestLabel();
   $("level").textContent=level;
   $("lives").textContent="❤️".repeat(Math.max(0,lives));
 }
@@ -187,7 +216,7 @@ function showOver(show){ $("overlayGameOver").classList.toggle("show", !!show); 
 // ---------- PERGUNTAS (progressivas por nível) ----------
 const QUESTION_BANK = {
   1: [
-    { q: "O que é Internet?", a: ["Uma rede que liga computadores", "Um jogo de tabuleiro", "Uma impressora"], correct: 0 },
+    { q: "O que é a Internet?", a: ["Uma rede que liga computadores", "Um jogo de tabuleiro", "Uma impressora"], correct: 0 },
     { q: "Deves falar com desconhecidos online?", a: ["Sim, sempre", "Não, e pedir ajuda a um adulto", "Só à noite"], correct: 1 },
   ],
   2: [
@@ -228,7 +257,33 @@ const QUESTION_BANK = {
   ],
 };
 
+const WHY = {
+ "O que é a Internet?": "A Internet é uma rede gigante que liga computadores e telemóveis em todo o mundo.",
+ "Deves falar com desconhecidos online?": "Online, qualquer pessoa pode fingir ser quem não é. Se um desconhecido te escrever, fala com um adulto.",
+ "O que é uma palavra-passe?": "É um segredo que só tu deves saber, para ninguém entrar nas tuas contas.",
+ "Qual é uma boa palavra-passe?": "Quanto mais longa e única, mais difícil de adivinhar. “1234” ou o teu nome descobrem-se num instante.",
+ "Phishing é…": "No phishing, alguém finge ser um banco, uma loja ou um amigo para te levar a dar dados.",
+ "Antes de clicar num link, deves…": "Um link pode levar a um site falso. Confirma quem o enviou e se estavas à espera da mensagem.",
+ "Para que serve um antivírus?": "Deteta e bloqueia programas maliciosos antes de fazerem estragos.",
+ "Instalar apps de sites estranhos é…": "Apps fora das lojas oficiais podem trazer malware escondido.",
+ "O que faz uma firewall?": "A firewall é como um segurança à porta: deixa passar o que é seguro e bloqueia ligações suspeitas.",
+ "Se uma mensagem disser 'ganhaste um prémio', deves…": "Prémios inesperados são uma isca clássica. Se fosse verdade, não terias de carregar a correr.",
+ "O que é 2FA?": "Além da palavra-passe pede um segundo passo (por exemplo, um código no telemóvel). Mesmo que descubram a palavra-passe, não entram.",
+ "Partilhar palavras-passe com amigos é…": "Quem a tem pode usar a tua conta e passá-la a outros. Só a deves partilhar com um adulto de confiança.",
+ "Porque é importante atualizar o sistema?": "As atualizações corrigem falhas que os atacantes podem aproveitar.",
+ "Num site sem https, deves…": "Sem https, o que escreves pode ser intercetado. Evita pôr aí palavras-passe e dados pessoais.",
+ "Backups servem para…": "Se perderes ou estragares ficheiros (ou apanhares um vírus), tens uma cópia para recuperar.",
+ "Se vires algo estranho online, deves…": "Contar a um adulto ou ao professor ajuda a resolver depressa e a proteger os outros.",
+ "Uma boa regra online é…": "O que publicas pode ficar na Internet para sempre. Pensa antes de publicar.",
+ "Dados pessoais incluem…": "Morada, telefone, escola… tudo o que mostra quem és ou onde estás.",
+ "Qual é a melhor atitude de segurança?": "Ser curioso e confirmar antes de clicar protege-te de quase todas as burlas.",
+ "O que proteges quando usas boas práticas?": "Proteges as tuas contas, os teus dados e a tua privacidade."
+};
+const whyFor = (qObj)=>WHY[qObj.q]||"";
+let missedQs=[]; // perguntas falhadas: voltam a aparecer mais tarde
+
 function pickQuestionForLevel(lv){
+  if(missedQs.length && Math.random()<0.5) return missedQs[Math.floor(Math.random()*missedQs.length)];
   let list = QUESTION_BANK[lv] || QUESTION_BANK[10];
   list = filterQuestions(list);
   if(list.length===0) list = QUESTION_BANK[lv] || QUESTION_BANK[10];
@@ -296,12 +351,12 @@ function pickFact(level){
 
 function hintFor(qText){
   const t=qText.toLowerCase();
-  if(t.includes("phishing")) return "Dica: mensagens com urgência e links estranhos podem ser armadilhas.";
-  if(t.includes("palavra-passe")) return "Dica: usa uma palavra-passe longa e diferente para cada conta.";
-  if(t.includes("firewall")) return "Dica: a firewall ajuda a bloquear ligações suspeitas.";
-  if(t.includes("https")) return "Dica: em sites sem https evita colocar dados pessoais.";
-  if(t.includes("atualizar")) return "Dica: atualizações fecham falhas de segurança.";
-  return "Dica: pensa antes de clicar e pede ajuda se não tiveres a certeza.";
+  if(t.includes("phishing")) return "Sugestão: mensagens com urgência e links estranhos podem ser armadilhas.";
+  if(t.includes("palavra-passe")) return "Sugestão: usa uma palavra-passe longa e diferente para cada conta.";
+  if(t.includes("firewall")) return "Sugestão: a firewall ajuda a bloquear ligações suspeitas.";
+  if(t.includes("https")) return "Sugestão: em sites sem https evita colocar dados pessoais.";
+  if(t.includes("atualizar")) return "Sugestão: atualizações fecham falhas de segurança.";
+  return "Sugestão: pensa antes de clicar e pede ajuda se não tiveres a certeza.";
 }
 
 function showQuestionOverlay(qObj, onCorrect){
@@ -315,6 +370,7 @@ function showQuestionOverlay(qObj, onCorrect){
   const box = $("qOptions");
   box.innerHTML = "";
 
+  let errou=false;
   qObj.a.forEach((txt, i)=>{
     const b=document.createElement("button");
     b.className="optBtn";
@@ -322,9 +378,10 @@ function showQuestionOverlay(qObj, onCorrect){
     b.addEventListener("click", ()=>{
       if(quizLocked===false) return;
       const ok = i===qObj.correct;
-      $("qFeedback").textContent = ok ? "✅ Certo! Boa!" : `❌ Quase… tenta outra vez. 💡 ${hintFor(qObj.q)}`;
+      $("qFeedback").textContent = ok ? ("✅ Certo! Boa!"+(whyFor(qObj)?" 💡 Porquê? "+whyFor(qObj):"")) : `❌ Quase… tenta outra vez. 💡 ${hintFor(qObj.q)}`;
       if(ok){
         b.classList.add("good");
+        if(!errou) missedQs=missedQs.filter(m=>m!==qObj);
         quizLocked=false;
         setTimeout(()=>{
           overlay.classList.remove("show");
@@ -333,9 +390,10 @@ function showQuestionOverlay(qObj, onCorrect){
             onCorrect();
             loop();
           });
-        }, 450);
+        }, whyFor(qObj)?3600:450);
       }else{
         b.classList.add("bad");
+        errou=true; if(!missedQs.includes(qObj)) missedQs.push(qObj);
         // mantém a possibilidade de tentar novamente
       }
     });
@@ -472,7 +530,7 @@ function setupLevel(keepScore=true){
   ghosts=[];
   for(let i=0;i<n;i++){
     const s=spawns[i];
-    ghosts.push({x:s.x,y:s.y,px:s.x,py:s.y,dir:{x:1,y:0}});
+    ghosts.push({id:i,x:s.x,y:s.y,px:s.x,py:s.y,dir:{x:1,y:0},scared:false,eaten:false});
   }
   $("ghostsN").textContent=n;
 
@@ -481,7 +539,7 @@ function setupLevel(keepScore=true){
   stepMs = Math.max(110, Math.round(BASE_STEP_MS*speedFactor - (level-1)*8));
 // firewall aparece mais cedo em níveis altos
   firewallSpawnAt = Date.now() + Math.max(2500, 6500 - (level-1)*600);
-  setStatus(keepScore ? "" : "🚀 Nível " + level);
+  updateMission(); toast("🤖 VanBerto's — Nível "+level, 1600);
 }
 
 // ---------- MOVIMENTO ----------
@@ -499,13 +557,13 @@ function movePac(){
   pac.x=mx; pac.y=my;
 
   if(map[my][mx]===2){
-    map[my][mx]=0; score+=10; sPatch();
+    map[my][mx]=0; score+=10; sPatch(); munchUntil=Date.now()+260;
     chipsEatenThisLevel++;
     if(!bonusOnMap && chipsEatenThisLevel>0 && chipsEatenThisLevel%45===0) spawnBonus();
   }
   if(map[my][mx]===4){
     map[my][mx]=0; bonusOnMap=false;
-    score += BONUS_POINTS;
+    score += BONUS_POINTS; joyUntil=Date.now()+1000;
     toast(`⭐ +${BONUS_POINTS}`, 900);
     spawnParticles(mx*TILE+TILE/2, my*TILE+TILE/2, 14);
     sCoin();
@@ -513,6 +571,7 @@ function movePac(){
   if(map[my][mx]===5){
     map[my][mx]=0; heartOnMap=false;
     if(lives<MAX_LIVES) lives++;
+    joyUntil=Date.now()+1000;
     score += HEART_POINTS;
     toast(`❤️ +1 vida`, 900);
     spawnParticles(mx*TILE+TILE/2, my*TILE+TILE/2, 16);
@@ -520,20 +579,47 @@ function movePac(){
   }
   if(map[my][mx]===3){
     map[my][mx]=0; firewallOnMap=false;
-    power=true; powerEnd=Date.now()+POWER_TIME;
+    power=true; ghostCombo=100; powerEnd=Date.now()+POWER_TIME;
     $("powerBar").style.width="100%";
-    setStatus("🛡️ Firewall ativada!");
+    setStatus("🛡️ Firewall ativada! Come os malware azuis!");
     toast("🛡️ Proteção ativada!");
     scareUntil = Date.now() + 1400;
     powerFlashUntil = Date.now() + 900;
+    ghosts.forEach(g=>{ if(!g.eaten) g.scared=true; });
     sPower();
   }
 }
 
+function stepToward(sx,sy,tx,ty){
+  const key=(x,y)=>y*COLS+x, prev=new Map(), q=[[sx,sy]];
+  prev.set(key(sx,sy),null);
+  const D=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+  while(q.length){
+    const [x,y]=q.shift();
+    if(x===tx && y===ty) break;
+    for(const d of D){
+      const nx=x+d.x, ny=y+d.y;
+      if(isWall(nx,ny) || prev.has(key(nx,ny))) continue;
+      prev.set(key(nx,ny),[x,y,d]); q.push([nx,ny]);
+    }
+  }
+  if(!prev.has(key(tx,ty))) return null;
+  let cx=tx, cy=ty, step=null;
+  while(true){ const p=prev.get(key(cx,cy)); if(!p) break; step=p[2]; cx=p[0]; cy=p[1]; }
+  return step;
+}
+
 function moveGhost(g){
   g.px=g.x; g.py=g.y;
+  if(g.eaten){ // só os olhos: voltam ao centro e renascem
+    if(g.x===13 && g.y===9){ g.eaten=false; g.scared=false; return; }
+    const st=stepToward(g.x,g.y,13,9);
+    if(st){ g.x+=st.x; g.y+=st.y; g.dir=st; } else { g.x=13; g.y=9; }
+    return;
+  }
   const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-  let best=null, bestScore=power ? -Infinity : Infinity;
+  const fleeing=g.scared;
+  let best=null, bestScore=fleeing ? -Infinity : Infinity;
 
   for(const d of dirs){
     const nx=g.x+d.x, ny=g.y+d.y;
@@ -541,8 +627,12 @@ function moveGhost(g){
     // evita ir logo para trás se possível
     if(d.x===-g.dir.x && d.y===-g.dir.y) continue;
 
-    const dist=Math.abs(nx-pac.x)+Math.abs(ny-pac.y);
-    if(power ? dist>bestScore : dist<bestScore){
+    let tx=pac.x, ty=pac.y;
+    if(g.id===1){ tx=pac.x+pac.dir.x*4; ty=pac.y+pac.dir.y*4; }
+    else if(g.id===2 && Math.random()<0.35){ tx=Math.floor(Math.random()*COLS); ty=Math.floor(Math.random()*ROWS); }
+    else if(g.id===3 && Math.abs(g.x-pac.x)+Math.abs(g.y-pac.y)<7){ tx=1; ty=ROWS-2; }
+    const dist=Math.abs(nx-tx)+Math.abs(ny-ty);
+    if(fleeing ? dist>bestScore : dist<bestScore){
       bestScore=dist; best=d;
     }
   }
@@ -577,29 +667,29 @@ function resetAfterHit(){
   ghosts.forEach((g,i)=>{
     const s=spawns[i % spawns.length];
     g.x=s.x; g.y=s.y; g.px=s.x; g.py=s.y;
-    g.dir={x:1,y:0};
+    g.dir={x:1,y:0}; g.scared=false; g.eaten=false;
   });
 }
 
 function collide(){
   for(const g of ghosts){
+    if(g.eaten) continue;
     const same=(g.x===pac.x && g.y===pac.y);
     const crossed=(g.x===pac.px && g.y===pac.py && g.px===pac.x && g.py===pac.y);
+    if(!(same || crossed)) continue;
 
-    if(same || crossed){
-      if(power){
-        score+=200; sEat();
-        // respawn malware no centro
-        g.x=13; g.y=9; g.dir={x:1,y:0};
-      }else{
-        lives--; sHurt(); clampHUD();
-        if(lives<=0){
-          endGame();
-          return;
-        }
-        resetAfterHit();
-        return;
-      }
+    if(g.scared){
+      // malware assustado: o VanBerto's come-o! 200, 400, 800, 1600…
+      ghostCombo=Math.min(1600,ghostCombo*2);
+      score+=ghostCombo; sEat(); joyUntil=Date.now()+800;
+      toast("👻 +"+ghostCombo,800);
+      spawnParticles(g.x*TILE+TILE/2, g.y*TILE+TILE/2, 18);
+      g.scared=false; g.eaten=true;
+    }else{
+      lives--; hurtUntil=Date.now()+1300; sHurt(); clampHUD();
+      if(lives<=0){ endGame(); return; }
+      resetAfterHit();
+      return;
     }
   }
 }
@@ -625,18 +715,569 @@ function drawTile(img, x, y, w=TILE, h=TILE){
 
 function drawSprite(sheet, frame, x, y, size=32){
   const sx = frame*size;
-  ctx.drawImage(sheet, sx, 0, size, size, x*TILE+(TILE-size)/2, y*TILE+(TILE-size)/2, size, size);
+  const d=Math.round(size*1.3);   // sprites um pouco maiores que a casa
+  ctx.drawImage(sheet, sx, 0, size, size, x*TILE+(TILE-d)/2, y*TILE+(TILE-d)/2, d, d);
 }
 
-function drawShieldRing(cx, cy, t){
-  // ring a piscar (pixel-ish)
+// ---------- VANBERTO'S: o mesmo robô (vetorial) do jogo "Missão Cibersegurança" ----------
+function rrVan(ctx,x,y,w,h,r){
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();ctx.moveTo(x+rr,y);ctx.arcTo(x+w,y,x+w,y+h,rr);ctx.arcTo(x+w,y+h,x,y+h,rr);ctx.arcTo(x,y+h,x,y,rr);ctx.arcTo(x,y,x+w,y,rr);ctx.closePath();
+}
+function cVan(ctx,x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();}
+function cfVan(ctx,x,y,r,color){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();}
+function lVan(ctx,x1,y1,x2,y2){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+
+function makeVanBertoCanvas(blink,step,armsUp){
+  const w=96,h=96, cv=document.createElement("canvas"); cv.width=w; cv.height=h; const ctx=cv.getContext("2d");
+  ctx.clearRect(0,0,w,h);
+  ctx.lineJoin="round"; ctx.lineCap="round";
+  // Desloca todo o desenho 6px para baixo para o halo da antena (y≈0) não ser cortado.
+  // O setOffset do corpo físico foi ajustado em igual medida para o robô ficar na mesma posição no ecrã.
+  ctx.save(); ctx.translate(0, 6);
+  const NAVY="#16233e", NAVY2="#26365a", OUT="#101a30";
+  function white(x0,y0,x1,y1){const g=ctx.createLinearGradient(x0,y0,x1,y1);g.addColorStop(0,"#ffffff");g.addColorStop(0.55,"#e6edf7");g.addColorStop(1,"#b4c4dc");return g;}
+
+  // ===== PERNAS (bem visíveis por baixo do tronco; passo marcado) =====
+  const LIFT=8, STRIDE=3;
+  let lTop=70, rTop=70, lDX=0, rDX=0;          // topo da coxa; planta=70 -> pé a y=88
+  if(step===0){ lTop=70-LIFT; lDX=STRIDE; rDX=-STRIDE; }
+  else if(step===1){ rTop=70-LIFT; rDX=STRIDE; lDX=-STRIDE; }
+  function leg(cx,top){
+    rrVan(ctx,cx-5,top,10,11,4.5); ctx.fillStyle=white(cx-5,top,cx+5,top); ctx.fill();
+    ctx.lineWidth=2.6; ctx.strokeStyle=OUT; ctx.stroke();
+    const fy=top+9;
+    rrVan(ctx,cx-6.5,fy,13,9,4); ctx.fillStyle=NAVY; ctx.fill();
+    ctx.lineWidth=2.6; ctx.strokeStyle=OUT; ctx.stroke();
+    rrVan(ctx,cx-6.5,fy+2,13,2.4,1.2); ctx.fillStyle="rgba(255,255,255,0.85)"; ctx.fill();
+    cfVan(ctx,cx-2.5,fy+4.5,1.4,"rgba(255,255,255,0.5)");
+  }
+  leg(41+lDX,lTop); leg(55+rDX,rTop);
+
+  // ===== BRAÇOS (curtos e encostados; balançam ao contrário da perna do
+  // mesmo lado — braço esquerdo para trás quando a perna esquerda avança,
+  // tal como um passo natural — só nos frames de caminhar, step 0/1) =====
+  // Frame de salto (armsUp=true): braços erguidos quase direitos para cima,
+  // só com uma ligeira inclinação para fora — ignora o balanço de andar,
+  // usa outro ângulo. (Era 2.4 rad, o que punha as mãos longe do corpo,
+  // com um ar "descolado"; a 2.9 rad ficam coladas à cabeça, só saindo
+  // ligeiramente para os lados.)
+  const ARM_SWING = 0.24; // radianos
+  const JUMP_RAISE = 2.9; // radianos — braço roda de "para baixo" para "quase direito para cima"
+  let lArmSwing = 0, rArmSwing = 0;
+  if(armsUp){ lArmSwing = JUMP_RAISE; rArmSwing = -JUMP_RAISE; }
+  else if(step===0){ lArmSwing=-ARM_SWING; rArmSwing=ARM_SWING; }
+  else if(step===1){ lArmSwing=ARM_SWING; rArmSwing=-ARM_SWING; }
+  function arm(sx,swing){
+    ctx.save();
+    const px=sx+4.5, py=52; // pivô no ombro
+    ctx.translate(px,py); ctx.rotate(swing); ctx.translate(-px,-py);
+    rrVan(ctx,sx,52,9,13,4.5); ctx.fillStyle=white(sx,52,sx+9,52); ctx.fill();
+    ctx.lineWidth=2.6; ctx.strokeStyle=OUT; ctx.stroke();
+    const hx=sx+4.5, hy=67;
+    cfVan(ctx,hx,hy,5,NAVY);
+    ctx.lineWidth=2.3; ctx.strokeStyle=OUT; ctx.beginPath(); ctx.arc(hx,hy,5,0,Math.PI*2); ctx.stroke();
+    cfVan(ctx,hx-2,hy+1.6,1.4,NAVY2); cfVan(ctx,hx+0.5,hy+2.4,1.4,NAVY2); cfVan(ctx,hx+2.5,hy+1.6,1.4,NAVY2);
+    ctx.restore();
+  }
+  arm(17,lArmSwing); arm(70,rArmSwing);
+
+  // ===== TRONCO (estreito: x26–70, igual à cabeça) =====
+  rrVan(ctx,26,44,44,32,15); ctx.fillStyle=white(28,46,68,46); ctx.fill();
+  ctx.save(); rrVan(ctx,26,44,44,32,15); ctx.clip();
+  const wg=ctx.createLinearGradient(0,64,0,76); wg.addColorStop(0,"rgba(22,35,62,0)"); wg.addColorStop(0.4,"#1c2c4c"); wg.addColorStop(1,"#142038");
+  ctx.fillStyle=wg; ctx.fillRect(26,62,44,16);
+  ctx.strokeStyle="rgba(16,26,48,0.6)"; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(28,64); ctx.lineTo(68,64); ctx.stroke();
+  ctx.fillStyle="rgba(255,255,255,0.5)"; ctx.beginPath(); ctx.ellipse(36,52,9,5.5,-0.5,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  ctx.lineWidth=3; ctx.strokeStyle=OUT; rrVan(ctx,26,44,44,32,15); ctx.stroke();
+
+  // ===== PAINEL DO PEITO =====
+  cfVan(ctx,48,56,8,NAVY);
+  ctx.lineWidth=2.5; ctx.strokeStyle=OUT; ctx.beginPath(); ctx.arc(48,56,8,0,Math.PI*2); ctx.stroke();
+  const dome=ctx.createRadialGradient(45.5,53.5,1,48,56,7); dome.addColorStop(0,"#aebccf"); dome.addColorStop(0.6,"#5a6a85"); dome.addColorStop(1,"#2b3a57");
+  ctx.fillStyle=dome; ctx.beginPath(); ctx.arc(48,56,5.7,0,Math.PI*2); ctx.fill();
+  cfVan(ctx,46,53.8,1.5,"rgba(255,255,255,0.85)");
+
+  // ===== EAR PODS (atrás do capacete) =====
+  function pod(cx){
+    cfVan(ctx,cx,32,6,NAVY);
+    ctx.lineWidth=2.3; ctx.strokeStyle=OUT; ctx.beginPath(); ctx.arc(cx,32,6,0,Math.PI*2); ctx.stroke();
+    cfVan(ctx,cx,32,2.8,NAVY2); cfVan(ctx,cx-0.8,31,1,"rgba(255,255,255,0.6)");
+  }
+  pod(25); pod(71);
+
+  // ===== ANTENA =====
+  ctx.fillStyle=NAVY; ctx.beginPath(); ctx.moveTo(45,16); ctx.lineTo(51,16); ctx.lineTo(49.2,8); ctx.lineTo(46.8,8); ctx.closePath(); ctx.fill();
+  const halo=ctx.createRadialGradient(48,5,1,48,5,11); halo.addColorStop(0,"rgba(90,200,255,0.55)"); halo.addColorStop(1,"rgba(90,200,255,0)");
+  ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(48,5,11,0,Math.PI*2); ctx.fill();
+  const bg=ctx.createRadialGradient(46.3,3.5,0.5,48,5,5.5); bg.addColorStop(0,"#e6f7ff"); bg.addColorStop(0.4,"#48b4ff"); bg.addColorStop(1,"#1670d8");
+  ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(48,5,5.5,0,Math.PI*2); ctx.fill();
+  cfVan(ctx,46.2,3.4,1.6,"#ffffff");
+
+  // ===== CAPACETE =====
+  rrVan(ctx,26,14,44,34,17); ctx.fillStyle=white(28,15,68,15); ctx.fill();
+  ctx.lineWidth=3; ctx.strokeStyle=OUT; ctx.stroke();
+  ctx.save(); rrVan(ctx,26,14,44,34,17); ctx.clip();
+  ctx.fillStyle="rgba(255,255,255,0.6)"; ctx.beginPath(); ctx.ellipse(38,19,10,4,-0.5,0,Math.PI*2); ctx.fill(); ctx.restore();
+
+  // ===== MOLDURA + VISEIRA =====
+  rrVan(ctx,30,20,36,23,12); ctx.fillStyle=NAVY; ctx.fill();
+  rrVan(ctx,32.5,22,31,19,10);
+  const vg=ctx.createLinearGradient(0,22,0,41); vg.addColorStop(0,"#7fd4ff"); vg.addColorStop(0.5,"#2a9bf0"); vg.addColorStop(1,"#1366c6");
+  ctx.fillStyle=vg; ctx.fill();
+  ctx.save(); rrVan(ctx,32.5,22,31,19,10); ctx.clip();
+  ctx.fillStyle="rgba(255,255,255,0.45)"; ctx.beginPath(); ctx.ellipse(42,25,9,3.5,-0.4,0,Math.PI*2); ctx.fill(); ctx.restore();
+
+  // ===== OLHOS =====
+  if(!blink){
+    ctx.fillStyle="#0a0f1c";
+    ctx.beginPath(); ctx.ellipse(41,30,3.3,4,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(55,30,3.3,4,0,0,Math.PI*2); ctx.fill();
+    cfVan(ctx,42.3,28.4,1.5,"#fff"); cfVan(ctx,39.9,31,0.8,"#fff");
+    cfVan(ctx,56.3,28.4,1.5,"#fff"); cfVan(ctx,53.9,31,0.8,"#fff");
+  } else if(blink==="wink"){
+    // pisca-olho brincalhão — olho esquerdo aberto normal, direito fechado num arco
+    ctx.fillStyle="#0a0f1c";
+    ctx.beginPath(); ctx.ellipse(41,30,3.3,4,0,0,Math.PI*2); ctx.fill();
+    cfVan(ctx,42.3,28.4,1.5,"#fff"); cfVan(ctx,39.9,31,0.8,"#fff");
+    ctx.lineWidth=3; ctx.strokeStyle="#0a0f1c"; ctx.lineCap="round";
+    ctx.beginPath(); ctx.arc(55,31,3.5,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
+  } else if(blink==="happy"){
+    // sorriso grande e feliz — olhos fechados em arco (mais generosos que o piscar normal)
+    // + bochechas coradas, para se distinguir claramente do sorriso base neutro.
+    ctx.lineWidth=3.2; ctx.strokeStyle="#0a0f1c"; ctx.lineCap="round";
+    ctx.beginPath(); ctx.arc(41,31,3.9,0.10*Math.PI,0.90*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(55,31,3.9,0.10*Math.PI,0.90*Math.PI); ctx.stroke();
+    cfVan(ctx,33.5,35.5,3,"rgba(255,120,120,0.55)");
+    cfVan(ctx,62.5,35.5,3,"rgba(255,120,120,0.55)");
+  } else if(blink==="sad"){
+    // sobrancelhas preocupadas (inclinadas para cima no centro) + olhos tristes + lágrima
+    ctx.strokeStyle="#0a0f1c"; ctx.lineWidth=2.3; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(37,24); ctx.lineTo(44.5,27); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(59,24); ctx.lineTo(51.5,27); ctx.stroke();
+    ctx.fillStyle="#0a0f1c";
+    ctx.beginPath(); ctx.ellipse(41,32,2.8,3.1,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(55,32,2.8,3.1,0,0,Math.PI*2); ctx.fill();
+    cfVan(ctx,42,30.7,1.1,"#fff"); cfVan(ctx,56,30.7,1.1,"#fff");
+    // lagrimazinha a escorrer do olho direito
+    ctx.fillStyle="#6fd0ff";
+    ctx.beginPath();
+    ctx.moveTo(56,35); ctx.quadraticCurveTo(59,40,56,43.5); ctx.quadraticCurveTo(53,40,56,35);
+    ctx.closePath(); ctx.fill();
+  } else {
+    // piscar feliz — arcos ^_^
+    ctx.lineWidth=3; ctx.strokeStyle="#0a0f1c";
+    ctx.beginPath(); ctx.arc(41,31,3.5,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
+    ctx.beginPath(); ctx.arc(55,31,3.5,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
+  }
+  // ===== BOCA — sorriso aberto e contente (variantes: maior no pisca-olho/feliz, invertida na tristeza) =====
+  ctx.fillStyle="#0a0f1c";
+  if(blink==="wink"){
+    ctx.beginPath(); ctx.ellipse(48,36,5.6,3.6,0,0,Math.PI); ctx.fill();   // sorriso maroto, um pouco mais largo
+    ctx.fillStyle="#ff7a7a";
+    ctx.beginPath(); ctx.ellipse(48,37.6,2.9,1.7,0,0,Math.PI); ctx.fill();
+  } else if(blink==="happy"){
+    ctx.beginPath(); ctx.ellipse(48,36,6.2,4.2,0,0,Math.PI); ctx.fill();   // sorriso grande, o maior de todos
+    ctx.fillStyle="#ff7a7a";
+    ctx.beginPath(); ctx.ellipse(48,38,3.2,1.9,0,0,Math.PI); ctx.fill();
+  } else if(blink==="sad"){
+    // boca triste — arco invertido, cantos para baixo (sem preenchimento, só o traço)
+    ctx.strokeStyle="#0a0f1c"; ctx.lineWidth=2.4; ctx.lineCap="round";
+    ctx.beginPath(); ctx.arc(48,40,4.2,Math.PI,Math.PI*2); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.ellipse(48,36,4.6,3.2,0,0,Math.PI); ctx.fill();   // metade de baixo = sorriso
+    ctx.fillStyle="#ff7a7a";
+    ctx.beginPath(); ctx.ellipse(48,37.4,2.4,1.5,0,0,Math.PI); ctx.fill(); // línguinha
+  }
+
+  ctx.restore();
+  return cv;
+}
+
+const VAN={};
+function vanTex(key){
+  if(VAN[key]) return VAN[key];
+  const m={open:[false,-1],blink:[true,-1],wink:["wink",-1],happy:["happy",-1],sad:["sad",-1],walk1:[false,0],walk2:[false,1]};
+  const p=m[key]||m.open;
+  return (VAN[key]=makeVanBertoCanvas(p[0],p[1]));
+}
+function drawRobot(frame,x,y){
+  const now=Date.now(), t=performance.now();
+  const moving=running && !paused && (pac.px!==pac.x || pac.py!==pac.y);
+
+  // expressão (as mesmas do outro jogo: normal, piscar, pisca-olho, feliz, triste)
+  let key="open";
+  if(now<hurtUntil) key="sad";
+  else if(now<joyUntil) key="happy";
+  else {
+    const cyc=Math.floor(t/3300), ph=t%3300;
+    const isWink=(cyc%3===0);
+    if(ph<(isWink?240:130)) key=isWink?"wink":"blink";
+    else if(moving) key=(Math.floor(t/140)%2===0)?"walk1":"walk2";
+  }
+  // enquanto anda, os pés mexem (walk1/walk2); olhos normais
+
+  // pequeno balanço ao andar (igual ao outro jogo: sobe/desce + aperta/estica)
+  const step=Math.floor(t/140)%4;
+  const bobY=moving?[0,1.2,0,-1.4][step]:Math.sin(t/420)*0.4;
+  const sx=moving?[1.0,1.05,1.0,0.96][step]:1;
+  const sy=moving?[1.0,0.96,1.0,1.05][step]:1;
+
+  const k=0.38, d=96*k;
+  const cx=x*TILE+TILE/2, cy=y*TILE+TILE/2;
   ctx.save();
-  ctx.globalAlpha = powerBlink ? 0.45 : 0.8;
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#22c55e";
-  ctx.beginPath();
-  ctx.arc(cx, cy, 14 + (Math.sin(t/180)*0.8), 0, Math.PI*2);
-  ctx.stroke();
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+  ctx.translate(cx, cy+bobY);
+  ctx.scale(sx,sy);
+  ctx.drawImage(vanTex(key),-d/2,-d/2-0.5,d,d);
+  ctx.restore();
+  ctx.imageSmoothingEnabled=false;
+}
+
+// ---------- OS "MAUS" E O ESCUDO: os mesmos desenhos do jogo "Missão Cibersegurança" ----------
+  // helper: olhos malvados com sobrancelhas
+  function evilEyes(ctx,cx,cy,eyeColor){
+    // Sobrancelhas malvadas (mais espessas e inclinadas)
+    ctx.strokeStyle="#000"; ctx.lineWidth=3;
+    ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(cx-14,cy-11); ctx.lineTo(cx-4,cy-6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+14,cy-11); ctx.lineTo(cx+4,cy-6); ctx.stroke();
+    // Brancos dos olhos (com sombra)
+    ctx.shadowColor="rgba(0,0,0,0.4)"; ctx.shadowBlur=3;
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.ellipse(cx-7,cy,5.5,6.5,Math.PI*0.08,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+7,cy,5.5,6.5,-Math.PI*0.08,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    // Íris colorida
+    ctx.fillStyle=eyeColor;
+    ctx.beginPath(); ctx.ellipse(cx-7,cy+1,3.5,4.5,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+7,cy+1,3.5,4.5,0,0,Math.PI*2); ctx.fill();
+    // Pupila preta
+    ctx.fillStyle="#000";
+    ctx.beginPath(); ctx.ellipse(cx-7,cy+2,1.8,2.4,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+7,cy+2,1.8,2.4,0,0,Math.PI*2); ctx.fill();
+    // Brilho duplo na pupila (mais realista)
+    ctx.fillStyle="rgba(255,255,255,0.75)";
+    ctx.beginPath(); ctx.arc(cx-8,cy-0.5,1.4,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+6,cy-0.5,1.4,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.45)";
+    ctx.beginPath(); ctx.arc(cx-6,cy+2,0.8,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+8,cy+2,0.8,0,Math.PI*2); ctx.fill();
+  }
+
+  // helper: boca malvada com dentes e babas
+  function evilMouth(ctx,cx,cy,color, drool=false){
+    // Boca aberta (meia-lua)
+    ctx.fillStyle="#1a0000";
+    ctx.beginPath(); ctx.arc(cx,cy,10,0,Math.PI); ctx.fill();
+    // Língua
+    ctx.fillStyle="#cc2244";
+    ctx.beginPath(); ctx.ellipse(cx, cy+5, 4, 3, 0, 0, Math.PI*2); ctx.fill();
+    // Dentes (4 dentes irregulares)
+    ctx.fillStyle="#ffffee";
+    ctx.fillRect(cx-9, cy, 4, 6);
+    ctx.fillRect(cx-4, cy, 4, 7);
+    ctx.fillRect(cx+1, cy, 4, 6);
+    ctx.fillRect(cx+6, cy, 4, 5);
+    // Contorno da boca
+    ctx.strokeStyle=color; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(cx,cy,10,0,Math.PI); ctx.stroke();
+    // Babas (detalhe de vilão perigoso)
+    if(drool){
+      ctx.fillStyle="rgba(200,255,200,0.7)";
+      ctx.beginPath(); ctx.moveTo(cx-3,cy+8); ctx.quadraticCurveTo(cx-3,cy+14,cx-2,cy+18); ctx.quadraticCurveTo(cx+0,cy+16,cx+1,cy+8); ctx.fill();
+    }
+  }
+
+
+function makeVilaoCanvas(kind){
+  const cv=document.createElement("canvas"); cv.width=64; cv.height=64; const ctx=cv.getContext("2d");
+  if(kind===0){
+    const cx=32,cy=32;
+
+    // Sombra no chão
+    ctx.fillStyle="rgba(0,0,0,0.22)";
+    ctx.beginPath(); ctx.ellipse(cx,cy+26,20,5,0,0,Math.PI*2); ctx.fill();
+
+    // Halo externo para contraste em qualquer fundo
+    ctx.shadowColor="rgba(200,0,0,0.60)"; ctx.shadowBlur=10;
+    ctx.strokeStyle="rgba(255,255,255,0.90)"; ctx.lineWidth=4.5;
+    ctx.beginPath(); ctx.arc(cx,cy,23,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle="rgba(0,0,0,0.30)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,25,0,Math.PI*2); ctx.stroke();
+
+    // Corpo — gradiente esférico rico
+    const gr=ctx.createRadialGradient(cx-8,cy-8,2,cx,cy,22);
+    gr.addColorStop(0,"#ff7070");
+    gr.addColorStop(0.25,"#ee1111");
+    gr.addColorStop(0.65,"#bb0000");
+    gr.addColorStop(1,"#6a0000");
+    ctx.beginPath(); ctx.arc(cx,cy,22,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+
+    // Padrão de pintas (marcas de perigo — como cogumelo venenoso)
+    const spots = [[cx-8,cy-8,4.5],[cx+8,cy-5,3.5],[cx-5,cy+8,4],[cx+10,cy+7,3],[cx+1,cy-13,3]];
+    spots.forEach(([px,py,pr])=>{
+      ctx.fillStyle="rgba(255,255,255,0.22)";
+      ctx.beginPath(); ctx.arc(px,py,pr,0,Math.PI*2); ctx.fill();
+      // Borda branca da pinta
+      ctx.strokeStyle="rgba(255,255,255,0.15)"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.arc(px,py,pr,0,Math.PI*2); ctx.stroke();
+    });
+
+    // Brilho esférico (canto sup. esq.)
+    ctx.fillStyle="rgba(255,200,200,0.40)";
+    ctx.beginPath(); ctx.ellipse(cx-8,cy-9,10,14,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.25)";
+    ctx.beginPath(); ctx.ellipse(cx-10,cy-12,5,7,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+
+    // Contorno final
+    ctx.strokeStyle="#6a0000"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,cy,22,0,Math.PI*2); ctx.stroke();
+
+    // Cara malvada
+    evilEyes(ctx,cx,cy-3,"#ff0000");
+    evilMouth(ctx,cx,cy+10,"#8a0000", false);
+    }
+  else if(kind===1){
+    const cx=32,cy=34;
+
+    // Sombra
+    ctx.fillStyle="rgba(0,0,0,0.20)";
+    ctx.beginPath(); ctx.ellipse(cx,cy+22,18,5,0,0,Math.PI*2); ctx.fill();
+
+    // Halo azul exterior
+    ctx.shadowColor="rgba(0,80,220,0.55)"; ctx.shadowBlur=10;
+    ctx.strokeStyle="rgba(255,255,255,0.88)"; ctx.lineWidth=4.5;
+    ctx.beginPath(); ctx.arc(cx,cy,23,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle="rgba(0,0,0,0.28)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,25,0,Math.PI*2); ctx.stroke();
+
+    // Aura azul elétrica
+    ctx.fillStyle="rgba(50,100,255,0.18)";
+    ctx.beginPath(); ctx.arc(cx,cy,28,0,Math.PI*2); ctx.fill();
+
+    // Espinhos (8 ao redor) — antes do corpo para ficarem por baixo
+    ctx.fillStyle="#003090";
+    ctx.shadowColor="rgba(0,60,180,0.50)"; ctx.shadowBlur=4;
+    for(let si=0;si<8;si++){
+      const sa=Math.PI*2*si/8 - Math.PI*0.08;
+      const sx1=cx+Math.cos(sa)*20, sy1=cy+Math.sin(sa)*20;
+      const sx2=cx+Math.cos(sa)*30, sy2=cy+Math.sin(sa)*30;
+      const sxL=cx+Math.cos(sa+0.25)*21, syL=cy+Math.sin(sa+0.25)*21;
+      const sxR=cx+Math.cos(sa-0.25)*21, syR=cy+Math.sin(sa-0.25)*21;
+      ctx.beginPath(); ctx.moveTo(sx2,sy2); ctx.lineTo(sxL,syL); ctx.lineTo(sxR,syR); ctx.closePath(); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+
+    // Corpo principal — gradiente azul elétrico
+    const gr=ctx.createRadialGradient(cx-7,cy-7,2,cx,cy,21);
+    gr.addColorStop(0,"#80b0ff");
+    gr.addColorStop(0.30,"#2255ee");
+    gr.addColorStop(0.70,"#0030cc");
+    gr.addColorStop(1,"#001080");
+    ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+
+    // Padrão de circuitos (linhas azuis brilhantes)
+    ctx.strokeStyle="rgba(150,200,255,0.35)"; ctx.lineWidth=1;
+    ctx.lineCap="round";
+    [[cx-6,cy-10,cx-6,cy-3],[cx-6,cy-3,cx+4,cy-3],[cx+4,cy-3,cx+4,cy+5],
+     [cx-12,cy+4,cx-4,cy+4],[cx+6,cy+8,cx+12,cy+2]].forEach(([x1,y1,x2,y2])=>{
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    });
+    // Nódulos dos circuitos
+    ctx.fillStyle="rgba(180,220,255,0.55)";
+    [[cx-6,cy-3],[cx+4,cy+5],[cx-4,cy+4]].forEach(([nx,ny])=>{
+      ctx.beginPath(); ctx.arc(nx,ny,2,0,Math.PI*2); ctx.fill();
+    });
+
+    // Brilho esférico
+    ctx.fillStyle="rgba(160,200,255,0.38)";
+    ctx.beginPath(); ctx.ellipse(cx-7,cy-8,9,13,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.22)";
+    ctx.beginPath(); ctx.ellipse(cx-9,cy-11,5,7,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+
+    // Contorno
+    ctx.strokeStyle="#001580"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.stroke();
+
+    evilEyes(ctx,cx,cy-2,"#0044ff");
+    evilMouth(ctx,cx,cy+10,"#001080", false);
+    }
+  else {
+    const cx=32,cy=30;
+
+    // Sombra
+    ctx.fillStyle="rgba(0,0,0,0.22)";
+    ctx.beginPath(); ctx.ellipse(cx,cy+28,22,6,0,0,Math.PI*2); ctx.fill();
+
+    // Halo verde exterior
+    ctx.shadowColor="rgba(0,160,0,0.55)"; ctx.shadowBlur=10;
+    ctx.strokeStyle="rgba(255,255,255,0.82)"; ctx.lineWidth=4.5;
+    ctx.beginPath(); ctx.arc(cx,cy,23,0,Math.PI*2); ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle="rgba(0,0,0,0.22)"; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,25,0,Math.PI*2); ctx.stroke();
+
+    // Corpo principal — gradiente verde rico
+    const gr=ctx.createRadialGradient(cx-6,cy-6,2,cx,cy,21);
+    gr.addColorStop(0,"#90ff50");
+    gr.addColorStop(0.35,"#30b020");
+    gr.addColorStop(0.70,"#0d7010");
+    gr.addColorStop(1,"#044806");
+    ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
+
+    // Patas (3 de cada lado, com articulações)
+    ctx.strokeStyle="#1a6010"; ctx.lineWidth=2.5; ctx.lineCap="round";
+    for(let pi=0;pi<3;pi++){
+      const py=cy-5+pi*7;
+      // Pata esquerda — 2 segmentos com joelho
+      ctx.beginPath(); ctx.moveTo(cx-21,py); ctx.lineTo(cx-28,py-5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx-28,py-5); ctx.lineTo(cx-35,py+4); ctx.stroke();
+      // Garra esquerda
+      ctx.fillStyle="#064806"; ctx.beginPath(); ctx.arc(cx-35,py+4,3.5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle="#1a6010"; ctx.lineWidth=1; ctx.stroke();
+      // Pata direita
+      ctx.strokeStyle="#1a6010"; ctx.lineWidth=2.5;
+      ctx.beginPath(); ctx.moveTo(cx+21,py); ctx.lineTo(cx+28,py-5); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx+28,py-5); ctx.lineTo(cx+35,py+4); ctx.stroke();
+      ctx.fillStyle="#064806"; ctx.beginPath(); ctx.arc(cx+35,py+4,3.5,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle="#1a6010"; ctx.lineWidth=1; ctx.stroke();
+    }
+
+    // Antenas curvas com bola brilhante
+    ctx.strokeStyle="#064806"; ctx.lineWidth=2.5; ctx.lineCap="round";
+    ctx.beginPath(); ctx.moveTo(cx-7,cy-20); ctx.quadraticCurveTo(cx-18,cy-36,cx-11,cy-45); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+7,cy-20); ctx.quadraticCurveTo(cx+18,cy-36,cx+11,cy-45); ctx.stroke();
+    // Bolas das antenas com brilho
+    ctx.shadowColor="rgba(255,100,50,0.70)"; ctx.shadowBlur=6;
+    ctx.fillStyle="#ff5520";
+    ctx.beginPath(); ctx.arc(cx-11,cy-45,5.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+11,cy-45,5.5,0,Math.PI*2); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle="#c04000"; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(cx-11,cy-45,5.5,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+11,cy-45,5.5,0,Math.PI*2); ctx.stroke();
+    // Brilho nas bolas
+    ctx.fillStyle="rgba(255,220,180,0.65)";
+    ctx.beginPath(); ctx.arc(cx-13,cy-47,2,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+9,cy-47,2,0,Math.PI*2); ctx.fill();
+
+    // Segmentos do abdómen (3 anéis)
+    ctx.strokeStyle="rgba(0,80,0,0.45)"; ctx.lineWidth=1.5;
+    for(let s=0;s<3;s++){
+      ctx.beginPath(); ctx.ellipse(cx,cy-3+s*9,16,3,0,0,Math.PI); ctx.stroke();
+    }
+
+    // Brilho esférico
+    ctx.fillStyle="rgba(200,255,150,0.28)";
+    ctx.beginPath(); ctx.ellipse(cx-7,cy-8,9,13,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,0.20)";
+    ctx.beginPath(); ctx.ellipse(cx-9,cy-11,5,7,Math.PI*0.3,0,Math.PI*2); ctx.fill();
+
+    // Contorno final
+    ctx.strokeStyle="#044806"; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.stroke();
+
+    evilEyes(ctx,cx,cy-2,"#00aa00");
+    evilMouth(ctx,cx,cy+10,"#0a5000", true); // babas no inseto — mais assustador!
+    }
+  return cv;
+}
+function makeMedalhaCanvas(){
+  const cv=document.createElement("canvas"); cv.width=52; cv.height=58; const ctx=cv.getContext("2d");
+
+    const cx=26, cy=26;
+
+    // Funcao auxiliar para desenhar a forma do escudo
+    function shieldPath(ctx, x, y, w, h){
+      const r=w*0.18;
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.lineTo(x+w-r, y);
+      ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+      ctx.lineTo(x+w, y+h*0.55);
+      // Curva inferior que forma a ponta do escudo
+      ctx.quadraticCurveTo(x+w, y+h*0.82, x+w/2, y+h);
+      ctx.quadraticCurveTo(x, y+h*0.82, x, y+h*0.55);
+      ctx.lineTo(x, y+r);
+      ctx.quadraticCurveTo(x, y, x+r, y);
+      ctx.closePath();
+    }
+
+    // Sombra exterior
+    ctx.shadowColor="rgba(255,215,0,0.55)"; ctx.shadowBlur=8;
+    // Borda exterior dourada
+    const borderGr=ctx.createLinearGradient(0,0,0,54);
+    borderGr.addColorStop(0,"#ffe060"); borderGr.addColorStop(1,"#c07000");
+    ctx.fillStyle=borderGr; shieldPath(ctx,1,1,50,54); ctx.fill();
+    ctx.shadowBlur=0;
+
+    // Corpo do escudo — gradiente azul real
+    const bodyGr=ctx.createLinearGradient(4,4,4,50);
+    bodyGr.addColorStop(0,"#4a90e8"); bodyGr.addColorStop(0.5,"#1a50b8"); bodyGr.addColorStop(1,"#0a2878");
+    ctx.fillStyle=bodyGr; shieldPath(ctx,4,4,44,50); ctx.fill();
+
+    // Reflexo de luz no topo esquerdo
+    ctx.fillStyle="rgba(255,255,255,0.28)";
+    ctx.beginPath(); ctx.ellipse(16,14,9,13,Math.PI*0.15,0,Math.PI*2); ctx.fill();
+
+    // Divisao central horizontal (cruz do escudo — faixa horizontal)
+    ctx.fillStyle="rgba(255,215,0,0.22)";
+    ctx.fillRect(4,24,44,6);
+    // Divisao central vertical
+    ctx.fillRect(23,4,6,50);
+
+    // Estrela dourada no centro
+    ctx.save(); ctx.translate(cx, cy+4);
+    ctx.shadowColor="#ffd700"; ctx.shadowBlur=6;
+    const sg=ctx.createRadialGradient(-1,-2,1,0,0,10);
+    sg.addColorStop(0,"#ffffff"); sg.addColorStop(0.35,"#ffe060"); sg.addColorStop(1,"#ffa000");
+    ctx.fillStyle=sg;
+    ctx.beginPath();
+    for(let j=0;j<5;j++){
+      const o=Math.PI*2*j/5-Math.PI/2, inn=o+Math.PI/5;
+      j===0?ctx.moveTo(Math.cos(o)*11,Math.sin(o)*11):ctx.lineTo(Math.cos(o)*11,Math.sin(o)*11);
+      ctx.lineTo(Math.cos(inn)*5,Math.sin(inn)*5);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.restore();
+
+    // Contorno exterior dourado
+    ctx.strokeStyle="#ffd700"; ctx.lineWidth=2.5;
+    shieldPath(ctx,4,4,44,50); ctx.stroke();
+    // Linha de brilho interior
+    ctx.strokeStyle="rgba(255,255,255,0.35)"; ctx.lineWidth=1.2;
+    shieldPath(ctx,7,7,38,44); ctx.stroke();
+
+    
+  return cv;
+}
+const VIL={};
+function vilTex(kind){ return VIL[kind]||(VIL[kind]=makeVilaoCanvas(kind)); }
+let MEDALHA=null;
+function medalhaTex(){ return MEDALHA||(MEDALHA=makeMedalhaCanvas()); }
+
+function drawShieldRing(cx, cy, t){
+  // Halo azul pulsante + barra de tempo (como no jogo "Missão Cibersegurança")
+  const pulse = 0.55 + Math.sin(t*0.004)*0.45;
+  ctx.save();
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "rgba(68,136,255,"+(0.55*pulse+0.1)+")";
+  ctx.beginPath(); ctx.arc(cx, cy, (34+pulse*6)*0.5, 0, Math.PI*2); ctx.stroke();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = "rgba(136,204,255,"+(0.7*pulse+0.1)+")";
+  ctx.beginPath(); ctx.arc(cx, cy, (26+pulse*4)*0.5, 0, Math.PI*2); ctx.stroke();
+  // barra de tempo por cima do robô
+  const pct=Math.max(0,Math.min(1,(powerEnd-Date.now())/POWER_TIME));
+  const bw=24, bh=3.5, bx=cx-bw/2, by=cy-26;
+  ctx.fillStyle="rgba(0,0,0,0.45)"; roundRect(ctx,bx-1,by-1,bw+2,bh+2,2.5,true,false);
+  ctx.fillStyle = pct>0.5?"#2266ff":(pct>0.25?"#55aaff":"#ff4400");
+  roundRect(ctx,bx,by,Math.max(2,bw*pct),bh,2,true,false);
+  ctx.fillStyle="rgba(255,255,255,0.3)"; roundRect(ctx,bx,by,Math.max(2,bw*pct),bh/2,1.5,true,false);
   ctx.restore();
 }
 
@@ -692,8 +1333,57 @@ function drawParticles(){
   }
 }
 
+let lastStepAt=0, ghostCombo=100;
+let best=0; try{best=+localStorage.getItem("vanberto_best")||0;}catch(e){}
+let bestName=""; try{bestName=localStorage.getItem("vanberto_best_name")||"";}catch(e){}
+let playerName=""; try{playerName=localStorage.getItem("vanberto_name")||"";}catch(e){}
+function bestLabel(){ const v=Math.max(best,score), n=score>best?(playerName||"Jogador"):bestName; return v+(n?" ("+n+")":""); }
+function saveBest(){ if(score>best){best=score; bestName=playerName||"Jogador"; try{localStorage.setItem("vanberto_best",best); localStorage.setItem("vanberto_best_name",bestName);}catch(e){}} $("best").textContent=bestLabel(); }
+const tmp=document.createElement("canvas"); tmp.width=tmp.height=64; const tctx=tmp.getContext("2d");
+function drawEyes(x,y){
+  const px=x*TILE+TILE/2, py=y*TILE+TILE/2;
+  ctx.save();
+  for(const o of [-5,5]){
+    ctx.fillStyle="#fff"; ctx.beginPath(); ctx.arc(px+o,py,4.8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle="#1d4ed8"; ctx.beginPath(); ctx.arc(px+o,py+0.6,2.3,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawVilao(kind,x,y,scared,t,id){
+  const bob=Math.sin(t/220+id*1.7)*1.2;
+  const sc=1+0.03*Math.sin(t/160+id);
+  const d=Math.round(38*sc);
+  const px=x*TILE+TILE/2, py=y*TILE+TILE/2+bob;
+  ctx.save();
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+  if(scared){
+    tctx.globalCompositeOperation="source-over"; tctx.globalAlpha=1; tctx.clearRect(0,0,64,64);
+    tctx.drawImage(vilTex(kind),0,0);
+    tctx.globalCompositeOperation="source-atop"; tctx.globalAlpha=.7;
+    tctx.fillStyle=powerBlink?"#e5e7eb":"#60a5fa"; tctx.fillRect(0,0,64,64);
+    tctx.globalCompositeOperation="source-over"; tctx.globalAlpha=1;
+    ctx.drawImage(tmp,px-d/2,py-d/2,d,d);
+    // olhos assustados (X) por cima
+    const k=d/64, ex=4.4*(d/38), ey=py-1.2*(d/38);
+    ctx.globalAlpha=powerBlink?0.7:1;
+    ctx.fillStyle="#fff";
+    ctx.beginPath(); ctx.arc(px-ex,ey,3.6*k*1.7,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(px+ex,ey,3.6*k*1.7,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle="#0b1020"; ctx.lineWidth=1.4; ctx.lineCap="round"; const r=2.1;
+    for(const sx of [px-ex,px+ex]){
+      ctx.beginPath(); ctx.moveTo(sx-r,ey-r); ctx.lineTo(sx+r,ey+r); ctx.moveTo(sx+r,ey-r); ctx.lineTo(sx-r,ey+r); ctx.stroke();
+    }
+  } else {
+    ctx.drawImage(vilTex(kind),px-d/2,py-d/2,d,d);
+  }
+  ctx.restore();
+  ctx.imageSmoothingEnabled=false;
+}
 function draw(){
+  ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.setTransform(canvas.width/(COLS*TILE),0,0,canvas.height/(ROWS*TILE),0,0);
+  ctx.imageSmoothingEnabled=false;
   if(!allAssetsLoaded()){
     // loading fallback
     ctx.fillStyle="#e5e7eb";
@@ -707,24 +1397,22 @@ function draw(){
   // mapa
   for(let y=0;y<ROWS;y++){
     for(let x=0;x<COLS;x++){
-      if(map[y][x]===1) drawTile(ASSETS.wall, x, y);
+      if(map[y][x]===1){ ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high"; drawTile(tinted("w",ASSETS.wall,wallHue()), x, y); ctx.imageSmoothingEnabled=false; }
       else if(map[y][x]===2) {
         const ps=Math.round(TILE*0.62);
         const po=(TILE-ps)/2;
-        ctx.drawImage(ASSETS.patch, x*TILE+po, y*TILE+po, ps, ps);
+        ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+        ctx.drawImage(tinted("p",ASSETS.patch,patchHue()), x*TILE+po, y*TILE+po, ps, ps);
+        ctx.imageSmoothingEnabled=false;
         } else if(map[y][x]===3){
-        // 🛡️ Firewall (emoji)
+        // 🛡️ Escudo (o mesmo do jogo "Missão Cibersegurança")
         const cx = x*TILE + TILE/2;
         const cy = y*TILE + TILE/2;
-        const pulse = 1 + 0.08*Math.sin((Date.now()/180)+(x+y));
-
+        const pulse = 1 + 0.07*Math.sin((Date.now()/180)+(x+y));
+        const sh = 28*pulse, sw = sh*52/58;
         ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(pulse, pulse);
-        ctx.font = "26px system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("🛡️", 0, 1);
+        ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+        ctx.drawImage(medalhaTex(), cx-sw/2, cy-sh/2-1, sw, sh);
         ctx.restore();
       }
       else if(map[y][x]===4){
@@ -739,7 +1427,9 @@ function draw(){
   const frame = Math.floor(t/130) % 4;
 
   // robô
-  drawSprite(ASSETS.robot, frame, pac.x, pac.y, 32);
+  const kk=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/stepMs):1;
+  const lp=(a,b)=>a+(b-a)*kk;
+  drawRobot(frame, lp(pac.px,pac.x), lp(pac.py,pac.y));
 
   // brilho curto quando ativa proteção
   const now = Date.now();
@@ -749,116 +1439,22 @@ function draw(){
     ctx.globalAlpha = 0.35 + 0.35*a;
     ctx.fillStyle = "#93c5fd";
     ctx.beginPath();
-    ctx.arc(pac.x*TILE+TILE/2, pac.y*TILE+TILE/2, 22, 0, Math.PI*2);
+    ctx.arc(lp(pac.px,pac.x)*TILE+TILE/2, lp(pac.py,pac.y)*TILE+TILE/2, 18, 0, Math.PI*2);
     ctx.fill();
     ctx.restore();
   }
 
-  // mensagem rápida por cima do VanBerto
-  if(toastText && now < toastUntil){
-    ctx.save();
-    ctx.font = "bold 14px system-ui";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    // caixinha
-    const tx = pac.x*TILE + TILE/2;
-    const ty = pac.y*TILE - 4;
-    const padX = 10;
-    const metrics = ctx.measureText(toastText);
-    const w = metrics.width + padX*2;
-    const h = 22;
-    ctx.fillStyle = "rgba(2,6,23,0.75)";
-    roundRect(ctx, tx - w/2, ty - h, w, h, 8, true, false);
-    ctx.fillStyle = "#e5e7eb";
-    ctx.fillText(toastText, tx, ty - 4);
-    ctx.restore();
-  }
-
   if(power){
-    const cx=pac.x*TILE+TILE/2, cy=pac.y*TILE+TILE/2;
+    const cx=lp(pac.px,pac.x)*TILE+TILE/2, cy=lp(pac.py,pac.y)*TILE+TILE/2;
     drawShieldRing(cx, cy, t);
   }
 
   // malware
   const mFrame = Math.floor(t/150) % 4;
   for(const g of ghosts){
-    // fundo para destacar o malware (fica sempre visível no labirinto)
-    const mx = g.x*TILE + TILE/2;
-    const my = g.y*TILE + TILE/2;
-    ctx.save();
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = power ? "#93c5fd" : "#ff1f1f";
-    ctx.beginPath();
-    ctx.arc(mx, my, 14, 0, Math.PI*2);
-    ctx.fill();
-    ctx.restore();
-    drawSprite(ASSETS.malware, mFrame, g.x, g.y, 32);
+    if(g.eaten) drawEyes(lp(g.px,g.x), lp(g.py,g.y));
+    else drawVilao(g.id%3, lp(g.px,g.x), lp(g.py,g.y), g.scared, t, g.id);
 
-    
-    if(power){
-      // olhos "assustados" (sem mudar cor do corpo)
-      const cx = g.x*TILE + TILE/2;
-      const cy = g.y*TILE + TILE/2 - 2;
-      ctx.save();
-      ctx.globalAlpha = powerBlink ? 0.65 : 0.95;
-
-      // olhos brancos
-      ctx.fillStyle = "#ffffff";
-      ctx.beginPath(); ctx.arc(cx-6, cy-2, 4, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(cx+6, cy-2, 4, 0, Math.PI*2); ctx.fill();
-
-      // pupilas em X
-      ctx.strokeStyle = "#0b1020";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx-8, cy-4); ctx.lineTo(cx-4, cy);
-      ctx.moveTo(cx-4, cy-4); ctx.lineTo(cx-8, cy);
-      ctx.moveTo(cx+4, cy-4); ctx.lineTo(cx+8, cy);
-      ctx.moveTo(cx+8, cy-4); ctx.lineTo(cx+4, cy);
-      ctx.stroke();
-
-      ctx.restore();
-    }if(power){
-      // malware vulnerável → branco só no interior (sutil, mantendo olhos/contorno)
-      const cx = g.x*TILE + TILE/2;
-      const cy = g.y*TILE + TILE/2;
-
-      ctx.save();
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.globalAlpha = powerBlink ? 0.45 : 0.70;
-      ctx.fillStyle = "#ffffff";
-
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5.6, 0, Math.PI*2);
-      ctx.fill();
-
-      ctx.restore();
-    }
-
-    if(Date.now() < scareUntil){
-      ctx.save();
-      ctx.font = "900 16px system-ui";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const ex = g.x*TILE + TILE/2;
-      const ey = g.y*TILE + 4;
-      ctx.fillStyle = "rgba(255,255,255,0.85)";
-      ctx.beginPath();
-      ctx.arc(ex, ey, 10, 0, Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle = "#ef4444";
-      ctx.restore();
-    }
-
-    if(power){
-      // malware "assustado": tinge azul (mais visível)
-      ctx.save();
-      ctx.globalCompositeOperation = "source-atop";
-      ctx.globalAlpha = powerBlink ? 0.55 : 0.75;
-      ctx.fillStyle = "#60a5fa";
-      ctx.fillRect(g.x*TILE, g.y*TILE, TILE, TILE);
-      ctx.restore();
-    }
   }
   drawParticles();
 }
@@ -866,6 +1462,7 @@ function draw(){
 // ---------- LOOP ----------
 function loop(){
   if(!running || paused) return;
+  if(timer){clearTimeout(timer);timer=null;}
 
   // firewall spawn
   if(Date.now() > firewallSpawnAt && !firewallOnMap && !power){
@@ -880,6 +1477,7 @@ function loop(){
     $("powerBar").style.width = Math.max(0, left/POWER_TIME*100) + "%";
     if(left<=0){
       power=false; powerBlink=false;
+      ghosts.forEach(g=>g.scared=false);
       $("powerBar").style.width="0%";
       setStatus("");
     }
@@ -896,15 +1494,17 @@ function loop(){
 
 
   tick++;
+  lastStepAt=Date.now();
   movePac();
   ghosts.forEach(g=>{
-    if(power && (tick%2===0)) return; // mais lento em modo proteção
+    if(g.scared && (tick%2===0)){ g.px=g.x; g.py=g.y; return; } // mais lento em modo proteção
     moveGhost(g);
   });
   collide();
 
   // subir nível
   if(remainingPatches()===0){
+    if(level>=10){ sLevel(); draw(); showWin(); return; }
     level++;
     setStatus("🚀 Nível " + level + " — pergunta de segurança!");
     sLevel();
@@ -913,8 +1513,9 @@ function loop(){
     const qObj = pickQuestion(level);
     showQuestionOverlay(qObj, ()=>{
       setupLevel(true);
-      setStatus("🚀 Nível " + level + " — malware mais rápido!");
+      updateMission();
     });
+    draw(); clampHUD(); return;
   }
 
   draw();
@@ -927,13 +1528,15 @@ function loop(){
 function endGame(){
   running=false; paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
-  sOver();
+  sOver(); saveBest();
+  $("goMsg").textContent=(playerName||"Jogador")+", o VanBerto's foi infetado!";
   $("finalScore").textContent = score;
   $("finalLevel").textContent = level;
   showOver(true);
 }
 
 function hardReset(){
+  missedQs=[];
   score=0; level=1;
   lives = easyMode ? 5 : 3;
   clampHUD();
@@ -946,10 +1549,13 @@ window.addEventListener("keydown", (e)=>{
   ctxEnsure();
 
   if(!running) return;
-  if(e.key==="ArrowLeft") setDir(-1,0);
-  if(e.key==="ArrowRight") setDir(1,0);
-  if(e.key==="ArrowUp") setDir(0,-1);
-  if(e.key==="ArrowDown") setDir(0,1);
+  if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
+  const k=e.key.toLowerCase();
+  if(k==="p") $("pauseBtn").click();
+  if(e.key==="ArrowLeft"||k==="a") setDir(-1,0);
+  if(e.key==="ArrowRight"||k==="d") setDir(1,0);
+  if(e.key==="ArrowUp"||k==="w") setDir(0,-1);
+  if(e.key==="ArrowDown"||k==="s") setDir(0,1);
 });
 
 // ---------- CONTROLOS: swipe no canvas ----------
@@ -1109,6 +1715,48 @@ document.querySelectorAll(".dpad").forEach(btn=>{
 });
 
 // ---------- UI buttons ----------
+// ---------- ARRANQUE: nome → "Como jogar" (só na primeira vez) → Começar ----------
+const LS_HELP="vanberto_help";
+const helpSeen=()=>{ try{ return localStorage.getItem(LS_HELP)==="1"; }catch(e){ return true; } };
+const nameInput=$("playerName");
+let nameMode=false, helpMode=false;
+$("playerShow").textContent=playerName||"—";
+function hideIntro(){ ["overlayName","overlayHow"].forEach(id=>$(id).classList.remove("show")); showStart(false); }
+function askName(){
+  if(running && !paused) return;
+  hideIntro(); nameMode=true; nameInput.value=playerName;
+  $("overlayName").classList.add("show");
+  setTimeout(()=>{ try{ nameInput.focus(); nameInput.select(); }catch(e){} }, 60);
+}
+function saveName(){
+  const v=nameInput.value.trim().slice(0,14);
+  if(!v){ nameInput.focus(); return; }
+  playerName=v; try{ localStorage.setItem("vanberto_name",v); }catch(e){}
+  $("playerShow").textContent=v; clampHUD();
+  nameMode=false; nameInput.blur();
+  $("overlayName").classList.remove("show");
+  if(running) return;                       // a meio do jogo (em pausa): só muda o nome
+  if(!helpSeen()) showHelp(); else showStart(true);
+}
+function showHelp(){
+  if(running && !paused) $("pauseBtn").click();
+  hideIntro(); helpMode=true; $("overlayHow").classList.add("show");
+}
+function closeHelp(){
+  helpMode=false; try{ localStorage.setItem(LS_HELP,"1"); }catch(e){}
+  $("overlayHow").classList.remove("show");
+  if(!running) showStart(true);
+}
+function bootIntro(){
+  if(!playerName) askName();
+  else if(!helpSeen()) showHelp();
+  else showStart(true);
+}
+nameInput.addEventListener("keydown",(e)=>{ e.stopPropagation(); if(e.key==="Enter"){ e.preventDefault(); saveName(); } });
+$("btnName").addEventListener("click",()=>{ ctxEnsure(); saveName(); });
+$("btnHow").addEventListener("click",()=>{ ctxEnsure(); closeHelp(); });
+$("helpBtn").addEventListener("click",()=>{ ctxEnsure(); showHelp(); });
+$("playerRow").addEventListener("click",()=>{ ctxEnsure(); askName(); });
 $("btnStart").addEventListener("click", ()=>{
   ctxEnsure();
   showStart(false);
@@ -1138,7 +1786,9 @@ $("btnEasy").addEventListener("click", ()=>{
 
 $("pauseBtn").addEventListener("click", ()=>{
   if(!running) return;
+  if(quizLocked) return;
   paused=!paused;
+  if(paused&&timer){clearTimeout(timer);timer=null;}
   $("pauseBtn").textContent = paused ? "▶ Continuar" : "⏸ Pausa";
   if(!paused) loop();
 });
@@ -1152,32 +1802,16 @@ $("resetBtn").addEventListener("click", ()=>{
   if(timer){ clearTimeout(timer); timer=null; }
   running=false; paused=false;
   showOver(false);
-  setStartFact();
+  buildMap();
 showStart(true);
   setStatus("");
 });
 
 // ---------- arranque ----------
-// ---------- "Sabias que" no início ----------
-const START_FACTS = [
-  {topic: "Onde nasceu a Internet", text: "A Internet começou nos EUA, no final dos anos 60, com uma rede chamada ARPANET."},
-  {topic: "Phishing", text: "Phishing é quando alguém tenta enganar-te para roubar dados, por exemplo com links ou mensagens falsas."},
-  {topic: "Palavras-passe", text: "Usa palavras-passe longas e diferentes para cada conta. Um gestor de palavras-passe pode ajudar."},
-  {topic: "Atualizações", text: "Atualizar o sistema e as apps ajuda a fechar falhas de segurança."},
-  {topic: "Dados pessoais", text: "Não partilhes morada, escola, número ou fotos privadas com desconhecidos."},
-];
-
-function setStartFact(){
-  const f = START_FACTS[Math.floor(Math.random()*START_FACTS.length)];
-  const t = document.getElementById("startFactTopic");
-  const b = document.getElementById("startFactText");
-  if(t) t.textContent = f.topic;
-  if(b) b.textContent = f.text;
-}
-
-setStartFact();
-showStart(true);
+// ---------- mostrar o primeiro ecrã ----------
+bootIntro();
 // desenha um preview/loading
+if(!map.length) buildMap();
 (function warmup(){
   draw();
   requestAnimationFrame(warmup);
@@ -1188,7 +1822,9 @@ showStart(true);
 function showWin(){
   running=false;
   paused=false;
-  if(gameTimer){ clearTimeout(gameTimer); gameTimer=null; }
+  if(timer){ clearTimeout(timer); timer=null; }
+  saveBest();
+  const wm=$("winMsg"); if(wm) wm.textContent="Parabéns, "+(playerName||"Jogador")+"! Chegaste ao Nível 10 e protegeste o VanBerto's na Internet.";
   const el=document.getElementById("finalScoreWin");
   if(el) el.textContent=score;
   const ov=document.getElementById("overlayWin");
@@ -1199,14 +1835,14 @@ document.addEventListener("DOMContentLoaded", ()=>{
   if(bw) bw.addEventListener("click", ()=>{
     const ov=document.getElementById("overlayWin");
     if(ov) ov.classList.remove("show");
-    startGame();
+    $("btnRestart").click();
   });
 });
 // ---------- MISSÕES POR NÍVEL ----------
 const MISSION_TEXTS = {
   1:"Começa devagar e apanha alguns pontos ⭐",
   2:"Evita o malware vermelho 🦠",
-  3:"Apanha a firewall verde 🛡️",
+  3:"Apanha o escudo azul 🛡️",
   4:"Protege-te e come malware vulnerável",
   5:"Cuidado! Eles estão mais rápidos ⚡",
   6:"Aprende a reconhecer perigos online",
@@ -1232,9 +1868,11 @@ function setTheme(t){
   alert("Tema das perguntas: " + t);
 }
 
+const THEMES={passwords:["palavra-passe","2fa"],phishing:["phishing","link","prémio"],privacidade:["dados","publicar","https","partilh"]};
 function filterQuestions(list){
   if(teacherTheme==="todos") return list;
-  return list.filter(q=> (q.q||"").toLowerCase().includes(teacherTheme));
+  const keys=THEMES[teacherTheme]||[];
+  return list.filter(q=>keys.some(k=>(q.q+" "+q.a.join(" ")).toLowerCase().includes(k)));
 }
 
 function toggleFullscreen(){
@@ -1244,6 +1882,30 @@ function toggleFullscreen(){
   }else{
     document.exitFullscreen?.();
   }
-  setTimeout(resizeCanvasToScreen, 250);
+  setTimeout(onResize, 250);
 }
-document.addEventListener("fullscreenchange", ()=>setTimeout(resizeCanvasToScreen,250));
+document.addEventListener("fullscreenchange", ()=>setTimeout(onResize,250));
+
+$("themeSel").addEventListener("change",e=>{ teacherTheme=e.target.value; toast("📚 Tema: "+e.target.selectedOptions[0].text,1400); });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden && running && !paused) $("pauseBtn").click(); });
+$("best").textContent=bestLabel();
+
+// ---------- INSTALAR (PWA) ----------
+let deferredPrompt=null;
+const installBtn=$("installBtn");
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+const isStandalone=matchMedia("(display-mode: standalone)").matches || navigator.standalone===true;
+if(isIOS && !isStandalone) installBtn.hidden=false;
+window.addEventListener("beforeinstallprompt",(e)=>{ e.preventDefault(); deferredPrompt=e; if(!isStandalone) installBtn.hidden=false; });
+installBtn.addEventListener("click", async ()=>{
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    try{ await deferredPrompt.userChoice; }catch(e){}
+    deferredPrompt=null; installBtn.hidden=true;
+  }else if(isIOS){
+    setStatus("📲 No iPhone/iPad: toca em Partilhar (⬆️) e depois em “Adicionar ao ecrã principal”.");
+    setTimeout(()=>setStatus(""),9000);
+  }
+});
+window.addEventListener("appinstalled",()=>{ installBtn.hidden=true; deferredPrompt=null; setStatus("✅ Jogo instalado!"); setTimeout(()=>setStatus(""),4000); });
+window.__vbReady=true;

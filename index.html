@@ -1,9 +1,19 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt-PT">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>VanBerto's – Professora Vanda Várzea</title>
+  <meta name="theme-color" content="#241143">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="VanBerto's">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,18 +23,51 @@
 
     <div id="wrap">
       <div class="canvasWrap">
-        <canvas id="game" width="896" height="640"></canvas>
+        <canvas id="game" width="896" height="608" role="img" aria-label="Labirinto do jogo: guia o robô VanBerto's, apanha os patches e foge dos malware"></canvas>
 
-        <!-- Sabias que (início) -->
-        <div id="overlayStart" class="overlay show">
+        <!-- Como jogar (primeiro ecrã) -->
+        <div id="overlayHow" class="overlay">
           <div class="factCard">
             <div class="factHeader">
-              <div class="factTitle">💡 <span>Sabias que…</span> <span class="qmark">❓</span></div>
+              <div class="factTitle">🎮 <span>Como jogar</span></div>
             </div>
             <div class="factBody">
-              <div class="factTopic">🛰️ <b id="startFactTopic">Segurança na Internet</b></div>
-              <div class="factText" id="startFactText">A carregar…</div>
-              <button id="btnStart" class="factBtn">Continuar</button>
+              <ul class="howList">
+                <li>🤖 <b>Guia o VanBerto's</b> pelo labirinto: setas ou W A S D no computador; no telemóvel, desliza no ecrã ou usa os botões.</li>
+                <li>🟨 <b>Apanha todos os patches</b> (os quadradinhos) para passares de nível. São 10 níveis!</li>
+                <li>🦠 <b>Foge dos malware!</b> Se te apanharem, perdes uma vida ❤️.</li>
+                <li>🛡️ <b>Apanha o escudo</b>: os malware ficam azuis e podes comê-los! Quantos mais comeres seguidos, mais pontos (200, 400, 800, 1600).</li>
+                <li>⭐ A estrela dá pontos e o ❤️ dá uma vida extra.</li>
+                <li>🧠 No fim de cada nível respondes a uma <b>pergunta de segurança</b> na Internet.</li>
+              </ul>
+              <button id="btnHow" class="factBtn">Entendi!</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Como te chamas? -->
+        <div id="overlayName" class="overlay">
+          <div class="factCard">
+            <div class="factHeader">
+              <div class="factTitle">👤 <span>Como te chamas?</span></div>
+            </div>
+            <div class="factBody">
+              <div class="factText">Escreve o teu nome para o VanBerto's te conhecer!</div>
+              <label class="nameRow"><input id="playerName" maxlength="14" autocomplete="nickname" placeholder="O teu nome"></label>
+              <button id="btnName" class="factBtn">OK ▶</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Começar -->
+        <div id="overlayStart" class="overlay">
+          <div class="factCard">
+            <div class="factHeader">
+              <div class="factTitle">🤖 <span>Missão Internet Segura</span></div>
+            </div>
+            <div class="factBody">
+              <div class="factText">Apanha os patches, foge dos malware e responde às perguntas de segurança. Vamos a isso?</div>
+              <button id="btnStart" class="factBtn">▶ Começar</button>
             </div>
           </div>
         </div>
@@ -34,16 +77,17 @@
       <div id="overlayWin" class="overlay">
         <div class="card">
           <h2>🏁 Missão concluída!</h2>
-          <div class="factText">Parabéns! Chegaste ao <b>Nível 10</b> e protegeste o VanBerto's na Internet.</div>
+          <div class="factText" id="winMsg">Parabéns! Chegaste ao <b>Nível 10</b> e protegeste o VanBerto's na Internet.</div>
           <div class="factText">Pontos: <b id="finalScoreWin">0</b></div>
           <button id="btnRestartWin" class="factBtn">Jogar outra vez</button>
         </div>
       </div>
 
-<!-- Game Over --><!-- Game Over -->
+<!-- Game Over -->
         <div id="overlayGameOver" class="overlay">
           <div class="card">
-            <h2>💥 Game Over</h2>
+            <h2>💥 Fim de jogo</h2>
+            <p id="goMsg">O VanBerto's foi infetado!</p>
             <p>Pontos: <b id="finalScore">0</b></p>
             <p>Nível: <b id="finalLevel">1</b></p>
             <button id="btnRestart" class="big orange">⟳ Jogar outra vez</button>
@@ -76,14 +120,20 @@
         <button class="pause" id="pauseBtn">⏸ Pausa</button>
         <button class="sound" id="soundBtn">🔊 Som</button>
         <button class="sound" id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Ecrã inteiro</button>
+<button class="sound" id="helpBtn">❓ Como jogar</button>
+<button class="sound" id="installBtn" hidden>📲 Instalar jogo</button>
 <button class="reset" id="resetBtn">⟳ Reiniciar</button>
 
+        <p id="playerRow" class="clickable" title="Mudar o nome">👤 Jogador: <span id="playerShow">—</span> ✏️</p>
         <p>⭐ Pontos: <span id="score">0</span></p>
         <p>🧩 Nível: <span id="level">1</span></p>
         <p>🦠 Malware: <span id="ghostsN">0</span></p>
+        <p>🏆 Recorde: <span id="best">0</span></p>
         <p>❤️ Vidas: <span id="lives">❤️❤️❤️</span></p>
         <p id="status"></p>
 
+        <div class="powerLabel">👩‍🏫 Tema das perguntas</div>
+        <select id="themeSel"><option value="todos">Todos</option><option value="passwords">Palavras-passe</option><option value="phishing">Phishing</option><option value="privacidade">Privacidade</option></select>
         <div class="powerLabel">🛡️ Firewall</div>
         <div id="powerWrap"><div id="powerBar"></div></div>
 
@@ -96,12 +146,15 @@
             <button class="dpad" data-dir="down">▼</button>
             <button class="dpad" data-dir="right">▶</button>
           </div>
-          <div class="hint small">Dica: também podes deslizar no ecrã do jogo</div>
+          <div class="hint small">Sugestão: também podes deslizar no ecrã do jogo</div>
         </div>
       </div>
     </div>
   </div>
 
   <script src="main.js"></script>
+  <script>
+  if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){ window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+  </script>
 </body>
 </html>

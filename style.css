@@ -208,3 +208,121 @@ button{
   #wrap{flex-wrap:wrap;height:auto}
   #panel{width:100%}
 }
+
+/* ===== Ajuste automático ao ecrã ===== */
+@media (pointer:coarse){ .mobilePad{display:block} }
+.dpad{touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
+@media (max-width:900px){
+  .retro{padding:6px}
+  h1{font-size:clamp(15px,4.6vw,22px);margin:2px 0}
+  .retro > p{display:none}
+  #wrap{flex-direction:column;flex-wrap:nowrap;align-items:center;gap:8px;height:auto}
+  #panel{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px;overflow:visible}
+  #panel button{width:auto;flex:1 1 auto;margin:0;padding:8px 6px;font-size:12px}
+  #panel > p{margin:0;flex:1 1 30%;font-size:13px}
+  #status{flex-basis:100%}
+  .powerLabel{margin:2px 0 0;flex-basis:100%}
+  #powerWrap{flex-basis:100%}
+  .mobilePad{flex-basis:100%;margin-top:4px}
+  .dpad{width:min(30vw,110px);height:clamp(48px,8vh,70px)}
+  .hint{display:none}
+}
+@media (max-width:900px) and (orientation:landscape){
+  .retro > h1{display:none}
+  .retro{padding:6px}
+  #wrap{flex-direction:row;align-items:flex-start;height:calc(100vh - 12px)}
+  #panel{width:250px;flex:0 0 250px;max-height:100%;overflow:auto}
+  .dpad{width:70px;height:46px}
+  .card{padding:10px}.card h2{font-size:18px}
+  .factCard{width:96%}.factTitle{font-size:20px}.factText,.factTopic{font-size:14px}
+  .factBtn{margin-top:8px;padding:8px;font-size:15px}
+}
+#panel .mobilePad .dpad{flex:0 0 auto;width:min(28vw,110px);height:clamp(52px,9vh,72px);font-size:24px}
+@media (max-width:900px) and (orientation:landscape){ #panel .mobilePad .dpad{width:68px;height:46px;font-size:20px} }
+
+select{width:100%;padding:8px;border-radius:10px;margin-bottom:8px;font-weight:700}
+@media (max-width:900px){#panel select{flex:1 1 100%}}
+
+
+/* ===== Tema VanBerto's (igual ao Tetris): roxo, magenta e dourado ===== */
+body{
+  font-family:'Nunito',system-ui,sans-serif;
+  background:radial-gradient(ellipse 70% 55% at 50% 35%,rgba(236,30,121,.12) 0%,rgba(36,17,67,0) 55%,rgba(10,4,20,.95) 100%) #241143;
+}
+.retro{
+  background:linear-gradient(145deg,#2a0a4e 0%,#1a0835 60%,#0f0525 100%);
+  border:3px solid #ec1e79; outline:2px solid #ffa733; outline-offset:-6px;
+  box-shadow:0 0 40px rgba(236,30,121,.22);
+}
+h1{font-family:'Baloo 2','Fredoka One',sans-serif;font-weight:800;color:#fff8e0;text-shadow:0 0 16px rgba(236,30,121,.55)}
+.retro > p{color:#FFB3D1}
+.retro > p strong{color:#ffa733}
+canvas{
+  background:#08041a;
+  border:2.5px solid rgba(236,30,121,.6);
+  box-shadow:0 0 26px rgba(236,30,121,.25), inset 0 2px 10px rgba(0,0,0,.5);
+}
+#panel{
+  background:linear-gradient(145deg,#2a0a4e,#1a0835 60%,#0f0525);
+  border:2.5px solid #ec1e79; color:#ffe9c4;
+  box-shadow:0 0 22px rgba(236,30,121,.18);
+}
+#panel p{color:#ffe9c4}
+button{
+  font-family:'Baloo 2',sans-serif; letter-spacing:.2px;
+  border:2.5px solid #ec1e79;
+  box-shadow:4px 4px 0 #0a0520, inset 0 1px 0 rgba(255,180,80,.12);
+  transition:transform .08s, box-shadow .08s, filter .12s;
+}
+button:hover{filter:brightness(1.12)}
+button:active{transform:translate(2px,2px);box-shadow:2px 2px 0 #0a0520}
+.easy{background:linear-gradient(180deg,#4ecb71,#00b894);color:#04210f;border-color:#ffa733}
+.pause,.sound{background:linear-gradient(180deg,#3a0868,#25044a);color:#ffa733}
+.reset{background:linear-gradient(180deg,#ec1e79,#e04010);color:#fff8e0;border-color:#ffa733}
+.powerLabel{color:#ffa733}
+#powerWrap{background:#0f0525;border:1.5px solid rgba(236,30,121,.55)}
+#powerBar{background:linear-gradient(90deg,#ffa733,#ec1e79)}
+.dpad{background:linear-gradient(180deg,#3a0868,#25044a);color:#ffa733;border-color:#ec1e79}
+select{background:#25044a;color:#ffa733;border:2px solid #ec1e79;font-family:'Nunito',sans-serif}
+.overlay{background:rgba(10,4,25,.88)}
+.card{
+  background:linear-gradient(145deg,#2a0a4e,#1a0835);
+  border:3px solid #ec1e79; outline:2px solid #ffa733; outline-offset:-6px;
+  color:#fff8e0; box-shadow:0 10px 30px rgba(0,0,0,.45);
+}
+.card h2{font-family:'Fredoka One','Baloo 2',cursive;font-weight:400;color:#ffa733}
+.small{color:#FFB3D1}
+.big{background:linear-gradient(180deg,#4ecb71,#00b894);color:#04210f;border-color:#ffa733}
+.big.orange{background:linear-gradient(180deg,#ec1e79,#e04010);color:#fff8e0}
+.optBtn{background:linear-gradient(180deg,#3a0868,#25044a);color:#fff8e0;border:2.5px solid #ec1e79}
+.optBtn.good{border-color:#4ecb71;background:linear-gradient(180deg,#1f7a3c,#0f5a2a)}
+.optBtn.bad{border-color:#ff3b3b;background:linear-gradient(180deg,#8a1f3a,#5a0f26)}
+.factCard{background:#fff8e0;color:#241143;border:4px solid #ec1e79;box-shadow:0 18px 0 rgba(10,5,32,.7)}
+.factTitle,.factTopic,.factText{color:#241143}
+.factTitle .qmark{color:#ec1e79}
+.factBtn{background:linear-gradient(180deg,#ffa733,#ff8a1f);color:#241143;border:4px solid #241143;box-shadow:0 8px 0 rgba(10,5,32,.7)}
+
+/* ===== Melhorias ===== */
+[hidden]{display:none !important}
+body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+/* 100vh falha nos browsers do telemóvel (barra de endereço): usar 100dvh */
+@supports (height:100dvh){
+  body{min-height:100dvh}
+  #wrap{height:calc(100dvh - 120px)}
+}
+@media (max-width:900px){ #wrap{height:auto !important} }
+@media (max-width:900px) and (orientation:landscape){
+  @supports (height:100dvh){ #wrap{height:calc(100dvh - 12px) !important} }
+}
+.nameRow{display:block;margin-top:14px;text-align:center;font-weight:800;font-size:18px;color:#241143}
+.nameRow input{display:block;margin:8px auto 0;width:min(240px,90%);padding:10px;border:3px solid #ec1e79;border-radius:12px;font:800 18px 'Nunito',sans-serif;text-align:center;color:#241143;background:#fff}
+.nameRow input:focus{outline:3px solid #ffa733}
+@media (max-width:900px) and (orientation:landscape){.nameRow{margin-top:6px;font-size:14px}.nameRow input{padding:6px;font-size:15px;margin-top:4px}}
+#overlayHow .factCard{max-height:96%;overflow:auto}
+.howList{list-style:none;margin:8px 0 0;padding:0;text-align:left;color:#241143;font-size:clamp(12px,1.9vw,17px);line-height:1.35}
+.howList li{margin:7px 0}
+@media (max-width:900px) and (orientation:landscape){
+  .howList{font-size:12.5px}.howList li{margin:3px 0}
+  #overlayHow .factTitle{font-size:18px}
+}
+.clickable{cursor:pointer}
