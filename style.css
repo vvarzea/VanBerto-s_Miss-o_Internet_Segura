@@ -352,10 +352,23 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
   margin-top:6px;padding-top:6px;border-top:1px solid rgba(236,30,121,.35);
   text-align:center;font:800 13px 'Baloo 2','Nunito',sans-serif;letter-spacing:.3px;color:#ffa733;user-select:none;
 }
+#mascotStage.wide #mascotSay{
+  left:auto;right:2px;top:6%;max-width:calc(100% - var(--rd,100px)*1.1 - 12px);
+  transform:translateX(6px) scale(.92);
+}
+#mascotStage.wide #mascotSay.show{transform:none}
+#mascotStage.wide #mascotSay::after{
+  left:-8px;bottom:auto;top:50%;margin-top:-6px;
+  border:2.5px solid #ec1e79;border-top:none;border-right:none;transform:rotate(45deg);
+}
+/* telemóvel: faixa no topo do painel (robô à esquerda, balão à direita) */
 @media (max-width:900px){
-  #mascot{display:none}
+  #mascot{display:block;order:-1;flex:1 1 100%;height:112px;margin:0 0 2px}
   #panel .credit{flex:1 1 100%;margin-top:2px}
 }
+@media (max-width:900px) and (orientation:landscape){ #mascot{height:64px} }
+/* computador/tablet com pouca altura (ex.: telemóvel na horizontal): faixa baixa em vez de desaparecer */
+@media (min-width:901px) and (max-height:520px){ #mascot{order:-1;flex:0 0 64px;height:64px;margin:0 0 4px} }
 
 /* ===== Telemóvel: jogo maior, teclas e botões mais pequenos ===== */
 .rotateHint{display:none}
@@ -378,3 +391,9 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
   #panel .mobilePad .dpad{width:52px;height:38px;font-size:16px}
   #panel .mobilePad .row{margin-bottom:4px}
 }
+
+/* ===== Teclado nas perguntas ===== */
+.optBtn.sel{outline:3px solid #ffa733;outline-offset:2px}
+.kbhint{margin:8px 0 0;font-size:12px;font-weight:700;color:#FFB3D1;text-align:center}
+.factCard .kbhint{color:#6b4a8a}
+@media (pointer:coarse){ .kbhint,.kbOnly{display:none} }

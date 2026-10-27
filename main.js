@@ -369,6 +369,8 @@ function showQuestionOverlay(qObj, onCorrect){
 
   const box = $("qOptions");
   box.innerHTML = "";
+  qSel=-1;
+  { const nO=qObj.a.length; $("qHint").textContent="⌨️ Carrega "+["1","2","3","4"].slice(0,nO).join(", ")+" (ou "+["A","B","C","D"].slice(0,nO).join(", ")+") — ou usa ↑ ↓ e Enter"; }
 
   let errou=false;
   qObj.a.forEach((txt, i)=>{
@@ -380,6 +382,7 @@ function showQuestionOverlay(qObj, onCorrect){
       const ok = i===qObj.correct;
       $("qFeedback").textContent = ok ? ("✅ Certo! Boa!"+(whyFor(qObj)?" 💡 Porquê? "+whyFor(qObj):"")) : `❌ Quase… tenta outra vez. 💡 ${hintFor(qObj.q)}`;
       if(ok){
+        vibe([30,40,30]);
         b.classList.add("good");
         if(!errou) missedQs=missedQs.filter(m=>m!==qObj);
         quizLocked=false;
@@ -392,6 +395,7 @@ function showQuestionOverlay(qObj, onCorrect){
           });
         }, whyFor(qObj)?3600:450);
       }else{
+        vibe(180);
         b.classList.add("bad");
         errou=true; if(!missedQs.includes(qObj)) missedQs.push(qObj);
         // mantém a possibilidade de tentar novamente
@@ -1546,9 +1550,53 @@ function hardReset(){
 }
 
 // ---------- CONTROLOS: teclado ----------
+// ---------- TECLADO nos avisos e nas perguntas (sem ter de clicar) ----------
+const OV_IDS=["overlayQuestion","overlayFact","overlayName","overlayHow","overlayStart","overlayWin","overlayGameOver"];
+const OV_BTN={overlayFact:"btnFactContinue",overlayHow:"btnHow",overlayStart:"btnStart",overlayWin:"btnRestartWin",overlayGameOver:"btnRestart"};
+let ovSeenAt=0, qSel=-1;
+function visibleOverlay(){ for(const id of OV_IDS){ const el=$(id); if(el&&el.classList.contains("show")) return id; } return null; }
+if(window.MutationObserver){
+  const mo=new MutationObserver(ms=>{ for(const r of ms){ const el=r.target;
+    if(el.classList.contains("show") && !(r.oldValue||"").split(/\s+/).includes("show")){
+      ovSeenAt=performance.now();
+      if(el.id!=="overlayName"){ try{ const a=document.activeElement; if(a&&a!==document.body&&a.blur) a.blur(); }catch(e){} }  // nenhum botão com foco a "roubar" o Espaço/Enter
+    } } });
+  OV_IDS.forEach(id=>{ const el=$(id); if(el) mo.observe(el,{attributes:true,attributeFilter:["class"],attributeOldValue:true}); });
+}
+function qSelect(n){
+  const bs=[...$("qOptions").children]; if(!bs.length) return;
+  qSel=(n+bs.length)%bs.length;
+  bs.forEach((b,i)=>b.classList.toggle("sel",i===qSel));
+}
+// devolve true se a tecla foi tratada por um aviso/pergunta (e o jogo não deve reagir)
+function overlayKeys(e){
+  const id=visibleOverlay(); if(!id) return false;
+  if(e.ctrlKey||e.metaKey||e.altKey) return false;
+  const kq=e.key.toLowerCase(), enter=(e.key==="Enter"||e.key===" ");
+  const ready=performance.now()-ovSeenAt>450;       // evita respostas sem querer (teclas de jogo ainda carregadas)
+  if(id==="overlayQuestion"){
+    const bs=[...$("qOptions").children];
+    const n=["1","2","3","4"].indexOf(kq), l=["a","b","c","d"].indexOf(kq), idx=n>=0?n:l;
+    if(idx>=0&&idx<bs.length){ e.preventDefault(); if(!e.repeat&&ready&&quizLocked) bs[idx].click(); }
+    else if(kq==="arrowdown"||kq==="arrowright"){ e.preventDefault(); if(!e.repeat) qSelect(qSel<0?0:qSel+1); }
+    else if(kq==="arrowup"||kq==="arrowleft"){ e.preventDefault(); if(!e.repeat) qSelect(qSel<0?bs.length-1:qSel-1); }
+    else if(enter){ e.preventDefault(); if(!e.repeat&&ready&&quizLocked&&qSel>=0) bs[qSel].click(); }
+    return true;
+  }
+  if(id==="overlayName"){
+    if(e.key==="Enter"&&document.activeElement!==nameInput){ e.preventDefault(); if(!e.repeat&&ready) $("btnName").click(); return true; }
+    return false;
+  }
+  if(enter&&OV_BTN[id]){ e.preventDefault(); if(!e.repeat&&ready){ const b=$(OV_BTN[id]); if(b) b.click(); } return true; }
+  return id==="overlayFact";                         // a ler o "Sabias que": as setas não mexem no jogo
+}
+// vibração no telemóvel (segue o botão Som: sem som, sem vibração)
+function vibe(p){ if(!soundOn) return; try{ if(navigator.vibrate) navigator.vibrate(p); }catch(e){} }
+
 window.addEventListener("keydown", (e)=>{
   // desbloqueia audio no primeiro input
   ctxEnsure();
+  if(overlayKeys(e)) return;
 
   if(!running) return;
   if(["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) e.preventDefault();
@@ -1820,24 +1868,27 @@ function mascotTex(key){
   return (MT[key]=makeVanBertoCanvas(p[0],p[1],!!p[2],S));
 }
 const MASC={box:$("mascot"),stage:$("mascotStage"),cv:$("mascotCv"),say:$("mascotSay"),
-  w:0, h:0, S:4, hopAt:0, catchAt:0, shakeUntil:0, cheerUntil:0, sadUntil:0, sayUntil:0, items:[], sparks:[], count:0};
+  w:0, h:0, wide:false, S:4, hopAt:0, catchAt:0, shakeUntil:0, cheerUntil:0, sadUntil:0, sayUntil:0, items:[], sparks:[], count:0};
 const REDUCE_MOTION=!!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
 const pickOne=(a)=>a[Math.floor(Math.random()*a.length)];
 
 function mascotResize(){
   if(!MASC.box||!MASC.cv) return;
-  const w=Math.floor(MASC.box.clientWidth);
-  const h=Math.min(Math.floor(MASC.box.clientHeight), Math.floor(w*1.5));
-  const ok = w>=90 && h>=90;                 // sem espaço (ecrãs pequenos): não desenha
-  MASC.w=ok?w:0; MASC.h=ok?h:0;
+  const w=Math.floor(MASC.box.clientWidth), bh=Math.floor(MASC.box.clientHeight);
+  const wide=w>bh*1.5;                       // faixa baixa (telemóvel): robô à esquerda, balão à direita
+  const h=wide?bh:Math.min(bh,Math.floor(w*1.5));
+  const ok = w>=90 && h>=(wide?56:90);       // sem espaço: não desenha
+  MASC.w=ok?w:0; MASC.h=ok?h:0; MASC.wide=wide;
   MASC.stage.style.display = ok ? "" : "none";
   if(!ok) return;
   const dpr=Math.min(window.devicePixelRatio||1,3);
+  MASC.stage.classList.toggle("wide",wide);
   MASC.stage.style.width=w+"px"; MASC.stage.style.height=h+"px";
-  MASC.stage.style.fontSize=Math.max(11,Math.round(w*0.05))+"px";
+  const dcss=wide?Math.min(w*0.5,h*0.95):Math.min(w*1.2,h*0.92);
+  MASC.stage.style.setProperty("--rd",(wide?dcss:0)+"px");
+  MASC.stage.style.fontSize=(wide?Math.max(11,Math.round(h*0.12)):Math.max(11,Math.round(w*0.05)))+"px";
   MASC.cv.width=Math.round(w*dpr); MASC.cv.height=Math.round(h*dpr);
-  const dpx=Math.min(w*1.2,h*0.92)*dpr;      // tamanho do robô em pixéis reais
-  MASC.S=Math.min(8,Math.max(3,Math.ceil(dpx/96)));
+  MASC.S=Math.min(8,Math.max(3,Math.ceil(dcss*dpr/96)));
 }
 if(window.ResizeObserver && MASC.box) new ResizeObserver(mascotResize).observe(MASC.box);
 window.addEventListener("resize", mascotResize);
@@ -1850,6 +1901,8 @@ function mascotSay(txt, ms=1600){
 }
 function mascotCheer(ms){ MASC.cheerUntil=Date.now()+ms; }
 function mascotEvent(type){
+  const VIB={eat:40,hurt:[90,50,140],level:[40,40,40],bonus:30,heart:30,shield:30,over:300,win:[60,40,60,40,120]};
+  if(VIB[type]) vibe(VIB[type]);
   if(!MASC.cv) return;
   const now=Date.now();
   switch(type){
@@ -1894,7 +1947,9 @@ function drawMascot(){
   }
 
   // tamanho/posição: o robô ocupa o máximo possível (encostado ao fundo)
-  const d=Math.min(W*1.2, H*0.92), x0=(W-d)/2, yBase=H-d-H*0.01;
+  const wide=MASC.wide;
+  const d=wide?Math.min(W*0.5,H*0.95):Math.min(W*1.2,H*0.92), cx0=wide?d*0.6:W/2, x0=cx0-d/2, yBase=H-d-H*0.01;
+  const rk=wide?0.66:Math.min(1,W*0.48/(d*0.70));   // o anel do escudo não sai do painel
   let dy=Math.sin(t/420)*d*0.005, dx=0, air=0;
   if(!REDUCE_MOTION){
     if(now<MASC.cheerUntil) air=Math.abs(Math.sin(t/170))*d*0.06;
@@ -1903,7 +1958,7 @@ function drawMascot(){
     if(now<MASC.shakeUntil) dx=Math.sin(t/32)*d*0.018*((MASC.shakeUntil-now)/600);
   }
   dy-=air;
-  const cx=W/2+dx, cyRing=yBase+dy+d*0.52, cyChest=yBase+dy+d*0.65;
+  const cx=cx0+dx, cyRing=yBase+dy+d*0.52, cyChest=yBase+dy+d*0.65;
 
   // sombra no chão
   g.fillStyle="rgba(0,0,0,0.35)";
@@ -1915,12 +1970,12 @@ function drawMascot(){
     const pct=Math.max(0,Math.min(1,(powerEnd-now)/POWER_TIME));
     g.save();
     g.fillStyle="rgba(68,136,255,"+(0.10+0.08*pulse)+")";
-    g.beginPath(); g.arc(cx,cyRing,d*0.60,0,Math.PI*2); g.fill();
+    g.beginPath(); g.arc(cx,cyRing,d*0.60*rk,0,Math.PI*2); g.fill();
     g.lineWidth=d*0.012; g.strokeStyle="rgba(136,204,255,"+(0.45+0.4*pulse)+")";
-    g.beginPath(); g.arc(cx,cyRing,d*(0.62+0.02*pulse),0,Math.PI*2); g.stroke();
+    g.beginPath(); g.arc(cx,cyRing,d*(0.62+0.02*pulse)*rk,0,Math.PI*2); g.stroke();
     g.lineCap="round"; g.lineWidth=d*0.024;
     g.strokeStyle = pct>0.5?"#2266ff":(pct>0.25?"#55aaff":"#ff4400");
-    g.beginPath(); g.arc(cx,cyRing,d*0.68,-Math.PI/2,-Math.PI/2+Math.PI*2*pct); g.stroke();
+    g.beginPath(); g.arc(cx,cyRing,d*0.68*rk,-Math.PI/2,-Math.PI/2+Math.PI*2*pct); g.stroke();
     g.restore();
   }
 
@@ -1962,10 +2017,10 @@ function drawMascot(){
   if(running){
     const done=chipsEatenThisLevel, total=done+remainingPatches();
     const pulse=1+0.25*Math.max(0,1-(now-MASC.catchAt)/220);
-    const fs=Math.round(d*0.062*pulse);
+    const dprK=W/MASC.w, fs=Math.round((wide?Math.max(H*0.15,11*dprK):d*0.05)*pulse);
     g.font="800 "+fs+"px 'Baloo 2','Nunito',sans-serif"; g.textBaseline="middle"; g.textAlign="left";
     const txt="🧩 "+done+"/"+total, tw=g.measureText(txt).width, ph=fs*1.5, pw=tw+fs*1.1;
-    const bx=W*0.03, by=H-ph-d*0.02;
+    const bx=wide?d*1.12:W*0.03, by=wide?H-ph-H*0.04:H*0.02;
     g.fillStyle="rgba(15,5,37,0.78)"; g.strokeStyle="#ec1e79"; g.lineWidth=Math.max(1.5,d*0.007);
     g.beginPath(); g.roundRect ? g.roundRect(bx,by,pw,ph,ph/2) : g.rect(bx,by,pw,ph); g.fill(); g.stroke();
     g.fillStyle="#ffe9c4"; g.fillText(txt,bx+fs*0.55,by+ph/2+1);
