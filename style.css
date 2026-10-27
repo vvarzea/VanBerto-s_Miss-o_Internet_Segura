@@ -397,3 +397,6 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
 .kbhint{margin:8px 0 0;font-size:12px;font-weight:700;color:#FFB3D1;text-align:center}
 .factCard .kbhint{color:#6b4a8a}
 @media (pointer:coarse){ .kbhint,.kbOnly{display:none} }
+
+/* ===== Setas no topo do painel (logo por baixo do labirinto, ao alcance do polegar) ===== */
+#panel .mobilePad{order:-2;margin:0 0 6px}
