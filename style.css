@@ -400,3 +400,13 @@ body{box-sizing:border-box;padding:env(safe-area-inset-top) env(safe-area-inset-
 
 /* ===== Setas no topo do painel (logo por baixo do labirinto, ao alcance do polegar) ===== */
 #panel .mobilePad{order:-2;margin:0 0 6px}
+
+/* ===== Setas: tamanho confortável para o polegar (nem tão grandes como antes, nem tão pequenas) ===== */
+@media (max-width:900px){
+  #panel .mobilePad .row{gap:8px;margin-bottom:8px}
+  #panel .mobilePad .dpad{width:min(27vw,100px);height:68px;font-size:28px;border-radius:14px}
+}
+@media (max-width:900px) and (orientation:landscape){
+  #panel .mobilePad .dpad{width:64px;height:52px;font-size:22px}
+}
+#panel .mobilePad .dpad:active{filter:brightness(1.6);transform:scale(.96)}
