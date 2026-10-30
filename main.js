@@ -94,17 +94,22 @@ const sOver  = ()=> { tone(523,180,"square",0.05); tone(392,180,"square",0.05,0.
 
 // ================== JOGO ==================
 const TILE=32, COLS=28, ROWS=19;
+// câmara (telemóvel vertical): mostra só uma parte da largura do labirinto, maior, e segue o robô
+const cam={on:false, vis:COLS, x:0, snap:true};
 
 function resizeCanvasToScreen(){
   // resolução lógica do jogo
   const lw = COLS*TILE, lh = ROWS*TILE;
+  const root = document.documentElement;
+  if(root.classList.contains("phone")){ fitPhone(lw, lh, root.classList.contains("m-land")); return; }
+  cam.on=false; cam.vis=COLS; cam.x=0;
 
   const vw = window.innerWidth, vh = window.innerHeight;
-  const landscapePhone = vw <= 900 && vw > vh;      // telemóvel deitado
+  const landscapePhone = vw <= 900 && vw > vh;      // janela estreita deitada
   const sideBySide = vw > 900 || landscapePhone;     // painel ao lado do jogo
   const wrap = document.getElementById("wrap"), panel = document.getElementById("panel");
   const top = wrap.getBoundingClientRect().top + window.scrollY;
-  const pad = vw<=900 ? 4 : 14, gap = 16;   // menos margem no telemóvel: jogo maior
+  const pad = vw<=900 ? 4 : 14, gap = 16;
 
   let availW, availH;
   if(sideBySide){
@@ -113,7 +118,7 @@ function resizeCanvasToScreen(){
     availH = vh - top - pad;
   }else{
     availW = vw - pad*2;
-    availH = vh * 0.62;                               // deixa espaço para os botões por baixo
+    availH = vh * 0.62;
   }
   const scale = Math.max(0.2, Math.min(availW / lw, availH / lh));
   const cw = Math.floor(lw * scale), ch = Math.floor(lh * scale);
@@ -122,6 +127,28 @@ function resizeCanvasToScreen(){
   const dpr = Math.min(window.devicePixelRatio || 1, 3);
   canvas.width  = Math.max(Math.round(lw/2), Math.round(cw * dpr));
   canvas.height = Math.max(Math.round(lh/2), Math.round(ch * dpr));
+}
+// Telemóvel: o jogo ocupa tudo o que o painel não usa (sem scroll).
+// Na vertical, o labirinto é largo e ficaria minúsculo → zoom com câmara que segue o robô.
+function fitPhone(lw, lh, land){
+  const wrap=document.getElementById("wrap"), panel=document.getElementById("panel");
+  const gap=6, border=6;                               // borda do canvas (2×2,5 px) + folga
+  let availW, availH;
+  if(land){ availW = wrap.clientWidth - panel.offsetWidth - gap - border; availH = wrap.clientHeight - border; }
+  else    { availW = wrap.clientWidth - border; availH = wrap.clientHeight - panel.offsetHeight - gap - border; }
+  availW=Math.max(120,availW); availH=Math.max(90,availH);
+  const sFit = Math.min(availW/lw, availH/lh);         // labirinto inteiro
+  let scale=sFit, vis=COLS;
+  if(!land){
+    const MIN_VIS=16;                                  // nunca menos de 16 colunas visíveis
+    const sCam = Math.min(availH/lh, availW/(MIN_VIS*TILE));
+    if(sFit*TILE < 22 && sCam > sFit*1.15){ scale=sCam; vis=availW/(scale*TILE); }
+  }
+  cam.on = vis < COLS-0.01; cam.vis = cam.on ? vis : COLS; cam.snap=true;
+  const cw=Math.floor(cam.vis*TILE*scale), ch=Math.floor(lh*scale);
+  canvas.style.width=cw+"px"; canvas.style.height=ch+"px";
+  const dpr=Math.min(window.devicePixelRatio||1,3);
+  canvas.width=Math.max(120,Math.round(cw*dpr)); canvas.height=Math.max(90,Math.round(ch*dpr));
 }
 function onResize(){ resizeCanvasToScreen(); if(window.__vbReady) draw(); }
 window.addEventListener("resize", onResize);
@@ -1387,7 +1414,14 @@ function drawVilao(kind,x,y,scared,t,id){
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  ctx.setTransform(canvas.width/(COLS*TILE),0,0,canvas.height/(ROWS*TILE),0,0);
+  const csx=canvas.width/(cam.vis*TILE), csy=canvas.height/(ROWS*TILE);
+  if(cam.on){
+    const k0=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/stepMs):1;
+    const pxc=(pac.px+(pac.x-pac.px)*k0+0.5)*TILE;
+    const tgt=Math.max(0,Math.min(COLS*TILE-cam.vis*TILE, pxc-cam.vis*TILE/2));
+    cam.x = cam.snap ? tgt : cam.x+(tgt-cam.x)*0.2; cam.snap=false;
+  } else cam.x=0;
+  ctx.setTransform(csx,0,0,csy,-cam.x*csx,0);
   ctx.imageSmoothingEnabled=false;
   if(!allAssetsLoaded()){
     // loading fallback
@@ -1462,6 +1496,21 @@ function draw(){
 
   }
   drawParticles();
+
+  // câmara com zoom: setas nas margens a avisar de malware que está fora de vista
+  if(cam.on){
+    const L=cam.x, R=cam.x+cam.vis*TILE;
+    for(const g of ghosts){
+      if(g.eaten) continue;
+      const gx=(lp(g.px,g.x)+0.5)*TILE, gy=(lp(g.py,g.y)+0.5)*TILE;
+      if(gx>=L-4 && gx<=R+4) continue;
+      const left=gx<L, ex=left?L+3:R-3, d=left?11:-11;
+      ctx.save(); ctx.globalAlpha=0.92; ctx.fillStyle=g.scared?"#60a5fa":"#ff4d6d";
+      ctx.strokeStyle="#0a0520"; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(ex,gy); ctx.lineTo(ex+d,gy-9); ctx.lineTo(ex+d,gy+9); ctx.closePath();
+      ctx.stroke(); ctx.fill(); ctx.restore();
+    }
+  }
 }
 
 // ---------- LOOP ----------
@@ -1761,7 +1810,7 @@ document.querySelectorAll(".dpad").forEach(btn=>{
     if(dir==="up") setDir(0,-1);
     if(dir==="down") setDir(0,1);
   };
-  btn.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ctxEnsure(); apply(); }, {passive:false});
+  btn.addEventListener("pointerdown", (e)=>{ e.preventDefault(); ctxEnsure(); apply(); try{ navigator.vibrate&&navigator.vibrate(6); }catch(_){} }, {passive:false});
 });
 
 // ---------- UI buttons ----------
@@ -2133,4 +2182,45 @@ installBtn.addEventListener("click", async ()=>{
   }
 });
 window.addEventListener("appinstalled",()=>{ installBtn.hidden=true; deferredPrompt=null; setStatus("✅ Jogo instalado!"); setTimeout(()=>setStatus(""),4000); });
+// ---------- TELEMÓVEL: menu ☰, ecrã sempre ligado ----------
+(function(){
+  const root=document.documentElement, sheet=$("menuSheet"), box=$("menuBox"), closeBtn=$("menuClose");
+  const ids=["playerRow","btnEasy","resetBtn","helpBtn","fullscreenBtn","installBtn","themeLabel","themeSel"];
+  const holders={};
+  ids.forEach(id=>{ const el=$(id), ph=document.createComment(id); el.parentNode.insertBefore(ph,el); holders[id]=ph; });
+  function place(){
+    const phone=root.classList.contains("phone");
+    ids.forEach(id=>{
+      const el=$(id);
+      if(phone){ if(el.parentNode!==box) box.insertBefore(el, closeBtn); }
+      else if(el.parentNode===box){ holders[id].parentNode.insertBefore(el, holders[id]); }
+    });
+    if(!phone) document.body.classList.remove("menu-open");
+    onResize();
+  }
+  let menuPaused=false;
+  function openMenu(){
+    if(running && !paused && !quizLocked){ $("pauseBtn").click(); menuPaused=true; } else menuPaused=false;
+    document.body.classList.add("menu-open");
+  }
+  function closeMenu(resume){
+    document.body.classList.remove("menu-open");
+    if(resume && menuPaused && paused) $("pauseBtn").click();
+    menuPaused=false;
+  }
+  $("menuBtn").addEventListener("click", openMenu);
+  closeBtn.addEventListener("click", ()=>closeMenu(true));
+  sheet.addEventListener("click", e=>{ if(e.target===sheet) closeMenu(true); });
+  ["resetBtn","helpBtn","fullscreenBtn","btnEasy","installBtn"].forEach(id=>$(id).addEventListener("click", ()=>closeMenu(false)));
+  const re=()=>{ place(); };
+  window.addEventListener("resize", re);
+  window.addEventListener("orientationchange", ()=>setTimeout(re,250));
+  place();
+
+  // ecrã sempre ligado enquanto se joga (o Android apaga o ecrã se não houver toques no painel)
+  let wl=null;
+  async function wakeOn(){ try{ if("wakeLock" in navigator && !wl){ wl=await navigator.wakeLock.request("screen"); wl.addEventListener("release",()=>{ wl=null; }); } }catch(e){} }
+  window.addEventListener("pointerdown", wakeOn, {passive:true});
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) wakeOn(); });
+})();
 window.__vbReady=true;

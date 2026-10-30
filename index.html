@@ -15,6 +15,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Fredoka+One&family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
+  <script>
+  /* modo telemóvel: decide pelo toque + orientação (e não pela largura: o S23 Ultra deitado tem ~915 px) */
+  (function(){var d=document.documentElement;function m(){var c=matchMedia("(pointer:coarse)").matches,w=innerWidth,h=innerHeight;var land=c&&w>h&&h<=640,port=c&&w<=h&&w<=900;d.classList.toggle("m-land",land);d.classList.toggle("m-port",port);d.classList.toggle("phone",land||port);}window.__vbMode=m;m();addEventListener("resize",m);addEventListener("orientationchange",function(){setTimeout(m,200);});})();
+  </script>
 </head>
 <body>
   <div class="retro">
@@ -121,6 +125,7 @@
 
       <div id="panel">
         <button class="easy" id="btnEasy">🟢 Modo Fácil</button>
+        <button class="menu" id="menuBtn" aria-label="Menu">☰ Menu</button>
         <button class="pause" id="pauseBtn">⏸ Pausa</button>
         <button class="sound" id="soundBtn">🔊 Som</button>
         <button class="sound" id="fullscreenBtn" onclick="toggleFullscreen()">⛶ Ecrã inteiro</button>
@@ -129,17 +134,17 @@
 <button class="reset" id="resetBtn">⟳ Reiniciar</button>
 
         <p id="playerRow" class="clickable" title="Mudar o nome">👤 Jogador: <span id="playerShow">—</span> ✏️</p>
-        <p>⭐ Pontos: <span id="score">0</span></p>
-        <p>🧩 Nível: <span id="level">1</span></p>
-        <p>🦠 Malware: <span id="ghostsN">0</span></p>
-        <p>🏆 Recorde: <span id="best">0</span></p>
-        <p>❤️ Vidas: <span id="lives">❤️❤️❤️</span></p>
+        <p class="st st-score">⭐ <span class="lb">Pontos: </span><span id="score">0</span></p>
+        <p class="st st-level">🧩 <span class="lb">Nível: </span><span id="level">1</span></p>
+        <p class="st st-ghosts">🦠 <span class="lb">Malware: </span><span id="ghostsN">0</span></p>
+        <p class="st st-best">🏆 <span class="lb">Recorde: </span><span id="best">0</span></p>
+        <p class="st st-lives"><span class="ic">❤️ </span><span class="lb">Vidas: </span><span id="lives">❤️❤️❤️</span></p>
         <p id="status"></p>
         <div class="rotateHint">📱 Dica: põe o telemóvel na horizontal para o jogo ficar maior.</div>
 
-        <div class="powerLabel">👩‍🏫 Tema das perguntas</div>
+        <div class="powerLabel" id="themeLabel">👩‍🏫 Tema das perguntas</div>
         <select id="themeSel"><option value="todos">Todos</option><option value="passwords">Palavras-passe</option><option value="phishing">Phishing</option><option value="privacidade">Privacidade</option></select>
-        <div class="powerLabel">🛡️ Firewall</div>
+        <div class="powerLabel" id="fwLabel">🛡️ Firewall</div>
         <div id="powerWrap"><div id="powerBar"></div></div>
 
         <div class="mobilePad">
@@ -164,6 +169,14 @@
 
         <div class="credit">© Prof.ª Vanda Várzea</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Menu (telemóvel): recebe os botões menos usados -->
+  <div id="menuSheet" role="dialog" aria-label="Menu">
+    <div id="menuBox">
+      <button id="menuClose" class="reset">✖ Fechar</button>
+      <div class="credit">© Prof.ª Vanda Várzea</div>
     </div>
   </div>
 

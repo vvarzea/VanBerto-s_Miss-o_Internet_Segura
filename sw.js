@@ -1,5 +1,5 @@
 /* Service worker — VanBerto's Missão Internet Segura. Rede primeiro para HTML/JS/CSS (as alterações aparecem logo), cache para funcionar offline. */
-const CACHE = 'vb-missao-internet-segura-v1';
+const CACHE = 'vb-missao-internet-segura-v2';
 const CORE = ['./', 'index.html', 'main.js', 'style.css', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
