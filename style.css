@@ -493,3 +493,8 @@ html.phone .st .ic{display:none}
 html.phone .st-score{order:2}html.phone .st-level{order:3}html.phone .st-lives{order:4;font-size:12px}
 html.phone .st-ghosts{order:5}html.phone .st-best{order:6}
 html.m-land #panel .mobilePad .dpad{height:clamp(46px,15.5dvh,66px)}
+
+/* guardar e continuar */
+.factBtn.secondary{background:linear-gradient(180deg,#8b5cf6,#6d3bd8);color:#fff}
+#btnContinue{margin-bottom:10px}
+#resumeInfo{margin-bottom:10px}

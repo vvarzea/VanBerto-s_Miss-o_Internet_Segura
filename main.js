@@ -180,6 +180,7 @@ function spawnParticles(x,y,n=10){
 
 
 let score=0, level=1, lives=3;
+const LS_SAVE="vanberto_missao_save_v1";
 let running=false, paused=false;
 let tick=0;
 let easyMode=true;
@@ -235,7 +236,39 @@ function clampHUD(){
   $("level").textContent=level;
   $("lives").textContent="❤️".repeat(Math.max(0,lives));
 }
-function showStart(show){ $("overlayStart").classList.toggle("show", !!show); }
+function showStart(show){ if(show) updateResumeUI(); $("overlayStart").classList.toggle("show", !!show); }
+
+/* ═══════════ GUARDAR E CONTINUAR ═══════════ */
+function clearSave(){ try{ localStorage.removeItem(LS_SAVE); }catch(e){} }
+function readSave(){
+  try{
+    const s=JSON.parse(localStorage.getItem(LS_SAVE)||"null");
+    if(!s||s.v!==1) return null;
+    const lv=s.level|0, lf=s.lives|0, sc=s.score|0;
+    if(lv<1||lv>10||lf<1||lf>MAX_LIVES||sc<0) return null;
+    return {level:lv,lives:lf,score:sc,easy:!!s.easy};
+  }catch(e){ return null; }
+}
+function saveGame(){
+  if(!running) return;
+  if(level<=1&&score<=0) return;          // nada de útil para guardar
+  try{ localStorage.setItem(LS_SAVE,JSON.stringify({v:1,level,lives,score,easy:easyMode})); }catch(e){}
+}
+function updateResumeUI(){
+  const s=readSave(), b=$("btnContinue"), i=$("resumeInfo");
+  if(!b||!i) return;
+  b.hidden=!s; i.hidden=!s;
+  OV_BTN.overlayStart = s ? "btnContinue" : "btnStart";
+  if(s){
+    i.innerHTML="Tens um jogo guardado: <b>nível "+s.level+"</b> · ⭐ "+s.score+" pontos · "+"❤️".repeat(s.lives)+"<br><small>O nível recomeça do princípio. Para jogar do zero, carrega em «Começar de novo».</small>";
+    b.textContent="▶ Continuar (nível "+s.level+")";
+    $("btnStart").textContent="🔄 Começar de novo";
+    $("btnStart").classList.add("secondary");
+  } else {
+    $("btnStart").textContent="▶ Começar";
+    $("btnStart").classList.remove("secondary");
+  }
+}
 function showOver(show){ $("overlayGameOver").classList.toggle("show", !!show); }
 
 
@@ -571,6 +604,7 @@ function setupLevel(keepScore=true){
 // firewall aparece mais cedo em níveis altos
   firewallSpawnAt = Date.now() + Math.max(2500, 6500 - (level-1)*600);
   updateMission(); toast("VanBerto's — Nível "+level, 1600);
+  saveGame();
 }
 
 // ---------- MOVIMENTO ----------
@@ -700,6 +734,7 @@ function resetAfterHit(){
     g.x=s.x; g.y=s.y; g.px=s.x; g.py=s.y;
     g.dir={x:1,y:0}; g.scared=false; g.eaten=false;
   });
+  saveGame();
 }
 
 function collide(){
@@ -1580,7 +1615,7 @@ function loop(){
 
 // ---------- START / GAME OVER ----------
 function endGame(){
-  running=false; paused=false;
+  clearSave(); running=false; paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
   sOver(); saveBest(); mascotEvent("over");
   $("goMsg").textContent=(playerName||"Jogador")+", o VanBerto's foi infetado!";
@@ -1590,7 +1625,7 @@ function endGame(){
 }
 
 function hardReset(){
-  mascotEvent("start");
+  clearSave(); mascotEvent("start");
   missedQs=[];
   score=0; level=1;
   lives = easyMode ? 5 : 3;
@@ -1866,6 +1901,20 @@ $("btnStart").addEventListener("click", ()=>{
   loop();
 });
 
+$("btnContinue").addEventListener("click", ()=>{
+  ctxEnsure();
+  const s=readSave(); if(!s){ $("btnStart").click(); return; }
+  showStart(false); showOver(false);
+  mascotEvent("start"); missedQs=[];
+  easyMode=s.easy; $("btnEasy").textContent = easyMode ? "🟢 Modo Fácil" : "🟡 Modo Normal";
+  score=s.score; level=s.level; lives=s.lives;
+  $("pauseBtn").textContent="⏸ Pausa";
+  clampHUD(); setupLevel(true);
+  running=true; paused=false;
+  sStart(); mascotSay("Bem-vindo de volta! 🎮");
+  loop();
+});
+
 $("btnRestart").addEventListener("click", ()=>{
   ctxEnsure();
   showOver(false);
@@ -2090,7 +2139,7 @@ if(!map.length) buildMap();
 
 /* ========= VITÓRIA (nível 10) ========= */
 function showWin(){
-  mascotEvent("win");
+  clearSave(); mascotEvent("win");
   running=false;
   paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
@@ -2161,7 +2210,8 @@ function toggleFullscreen(){
 document.addEventListener("fullscreenchange", ()=>setTimeout(onResize,250));
 
 $("themeSel").addEventListener("change",e=>{ teacherTheme=e.target.value; toast("📚 Tema: "+e.target.selectedOptions[0].text,1400); });
-document.addEventListener("visibilitychange",()=>{ if(document.hidden && running && !paused) $("pauseBtn").click(); });
+document.addEventListener("visibilitychange",()=>{ if(document.hidden && running && !paused) $("pauseBtn").click(); if(document.hidden) saveGame(); });
+window.addEventListener("pagehide",saveGame);
 $("best").textContent=bestLabel();
 
 // ---------- INSTALAR (PWA) ----------
