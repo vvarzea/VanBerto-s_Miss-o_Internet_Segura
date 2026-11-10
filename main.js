@@ -1403,9 +1403,9 @@ function drawParticles(){
 let lastStepAt=0, ghostCombo=100;
 let best=0; try{best=+localStorage.getItem("vanberto_best")||0;}catch(e){}
 let bestName=""; try{bestName=localStorage.getItem("vanberto_best_name")||"";}catch(e){}
-let playerName=""; try{playerName=localStorage.getItem("vanberto_name")||"";}catch(e){}
-function bestLabel(){ const v=Math.max(best,score), n=score>best?(playerName||"Jogador"):bestName; return v+(n?" ("+n+")":""); }
-function saveBest(){ if(score>best){best=score; bestName=playerName||"Jogador"; try{localStorage.setItem("vanberto_best",best); localStorage.setItem("vanberto_best_name",bestName);}catch(e){}} $("best").textContent=bestLabel(); }
+let playerName=""; try{playerName=localStorage.getItem("vanberto_name")||localStorage.getItem("vb_playername")||"";}catch(e){}
+function bestLabel(){ const v=Math.max(best,score), n=score>best?(playerName||"Herói"):bestName; return v+(n?" ("+n+")":""); }
+function saveBest(){ if(score>best){best=score; bestName=playerName||"Herói"; try{localStorage.setItem("vanberto_best",best); localStorage.setItem("vanberto_best_name",bestName);}catch(e){}} $("best").textContent=bestLabel(); }
 const tmp=document.createElement("canvas"); tmp.width=tmp.height=64; const tctx=tmp.getContext("2d");
 function drawEyes(x,y){
   const px=x*TILE+TILE/2, py=y*TILE+TILE/2;
@@ -1446,6 +1446,38 @@ function drawVilao(kind,x,y,scared,t,id){
   ctx.restore();
   ctx.imageSmoothingEnabled=false;
 }
+
+/* Paredes finas: a grelha e as colisões não mudam; só se desenha uma "parede" mais fina
+   (centro + braços para as paredes vizinhas), com a mesma textura e cor de cada nível. */
+const WALL_THICK=12;                       // espessura da parede em px (o mosaico tem 32)
+let _wallLayer=null, _wallLayerKey=null;
+function getWallLayer(){
+  const hue=wallHue();
+  if(_wallLayer && _wallLayerKey===hue) return _wallLayer;
+  const S=2, c=document.createElement("canvas");
+  c.width=COLS*TILE*S; c.height=ROWS*TILE*S;
+  const g=c.getContext("2d");
+  g.scale(S,S); g.imageSmoothingEnabled=true; g.imageSmoothingQuality="high";
+  const img=tinted("w",ASSETS.wall,hue);
+  const T=WALL_THICK, o=(TILE-T)/2;
+  const isW=(x,y)=> y>=0&&y<ROWS&&x>=0&&x<COLS&&BASE[y][x]===1;
+  const p=new Path2D();
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+    if(BASE[y][x]!==1) continue;
+    const px=x*TILE, py=y*TILE;
+    p.rect(px+o,py+o,T,T);
+    if(isW(x+1,y)) p.rect(px+o+T,py+o,o,T);
+    if(isW(x-1,y)) p.rect(px,py+o,o,T);
+    if(isW(x,y+1)) p.rect(px+o,py+o+T,T,o);
+    if(isW(x,y-1)) p.rect(px+o,py,T,o);
+  }
+  g.save(); g.clip(p);
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++) if(BASE[y][x]===1) g.drawImage(img,x*TILE,y*TILE,TILE,TILE);
+  g.restore();
+  _wallLayer=c; _wallLayerKey=hue;
+  return c;
+}
+
 function draw(){
   ctx.setTransform(1,0,0,1,0,0);
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -1469,9 +1501,12 @@ function draw(){
   const t = performance.now();
 
   // mapa
+  ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
+  ctx.drawImage(getWallLayer(),0,0,COLS*TILE,ROWS*TILE);
+  ctx.imageSmoothingEnabled=false;
   for(let y=0;y<ROWS;y++){
     for(let x=0;x<COLS;x++){
-      if(map[y][x]===1){ ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high"; drawTile(tinted("w",ASSETS.wall,wallHue()), x, y); ctx.imageSmoothingEnabled=false; }
+      if(map[y][x]===1){ /* paredes: desenhadas na camada acima */ }
       else if(map[y][x]===2) {
         const ps=Math.round(TILE*0.62);
         const po=(TILE-ps)/2;
@@ -1618,7 +1653,7 @@ function endGame(){
   clearSave(); running=false; paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
   sOver(); saveBest(); mascotEvent("over");
-  $("goMsg").textContent=(playerName||"Jogador")+", o VanBerto's foi infetado!";
+  $("goMsg").textContent=(playerName||"Herói")+", o VanBerto's foi infetado!";
   $("finalScore").textContent = score;
   $("finalLevel").textContent = level;
   showOver(true);
@@ -1854,7 +1889,7 @@ const LS_HELP="vanberto_help";
 const helpSeen=()=>{ try{ return localStorage.getItem(LS_HELP)==="1"; }catch(e){ return true; } };
 const nameInput=$("playerName");
 let nameMode=false, helpMode=false;
-$("playerShow").textContent=playerName||"—";
+$("playerShow").textContent=playerName||"Herói";
 function hideIntro(){ ["overlayName","overlayHow"].forEach(id=>$(id).classList.remove("show")); showStart(false); }
 function askName(){
   if(running && !paused) return;
@@ -1863,9 +1898,8 @@ function askName(){
   setTimeout(()=>{ try{ nameInput.focus(); nameInput.select(); }catch(e){} }, 60);
 }
 function saveName(){
-  const v=nameInput.value.trim().slice(0,14);
-  if(!v){ nameInput.focus(); return; }
-  playerName=v; try{ localStorage.setItem("vanberto_name",v); }catch(e){}
+  const v=nameInput.value.trim().slice(0,14)||"Herói";
+  playerName=v; try{ localStorage.setItem("vanberto_name",v); localStorage.setItem("vb_playername",v); }catch(e){}
   $("playerShow").textContent=v; clampHUD();
   nameMode=false; nameInput.blur();
   $("overlayName").classList.remove("show");
@@ -2144,7 +2178,7 @@ function showWin(){
   paused=false;
   if(timer){ clearTimeout(timer); timer=null; }
   saveBest();
-  const wm=$("winMsg"); if(wm) wm.textContent="Parabéns, "+(playerName||"Jogador")+"! Chegaste ao Nível 10 e protegeste o VanBerto's na Internet.";
+  const wm=$("winMsg"); if(wm) wm.textContent="Parabéns, "+(playerName||"Herói")+"! Chegaste ao Nível 10 e protegeste o VanBerto's na Internet.";
   const el=document.getElementById("finalScoreWin");
   if(el) el.textContent=score;
   const ov=document.getElementById("overlayWin");
