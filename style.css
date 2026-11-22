@@ -504,3 +504,8 @@ html.m-land #panel .mobilePad .dpad{height:clamp(46px,15.5dvh,66px)}
 .optBtn.good::before{content:"✅ "}
 .optBtn.bad::before{content:"❌ "}
 .optBtn.bad{border-style:dashed}
+
+/* Alvos de toque com pelo menos 44 px nos botões do painel (telemóvel) */
+@media (pointer:coarse){
+  #panel button:not(.dpad), #menuBox button{min-height:44px;font-size:13px}
+}

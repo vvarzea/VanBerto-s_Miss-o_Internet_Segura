@@ -167,6 +167,10 @@ let chipsEatenThisLevel=0;
 let heartSpawnAt=0;
 const BONUS_LIFE_MS = 8500;
 const BONUS_POINTS = 100;
+const BOOST_MS = 8000, BOOST_FACTOR = 1.5; // turbo da estrela: VanBerto's 50% mais rápido durante 8 s
+let boostUntil = 0;
+function boostOn(){ return Date.now() < boostUntil; }
+function curStepMs(){ return boostOn() ? Math.round(stepMs/BOOST_FACTOR) : stepMs; }
 const HEART_POINTS = 50;
 const MAX_LIVES = 5;
 
@@ -433,7 +437,11 @@ function showQuestionOverlay(qObj, onCorrect){
   { const nO=qObj.a.length; $("qHint").textContent="⌨️ Carrega "+["1","2","3","4"].slice(0,nO).join(", ")+" (ou "+["A","B","C","D"].slice(0,nO).join(", ")+") — ou usa ↑ ↓ e Enter"; }
 
   let errou=false;
-  qObj.a.forEach((txt, i)=>{
+  // baralha a ordem das opções (antes a certa estava sempre na 1.ª ou 2.ª posição); i continua a ser o índice original
+  const order=qObj.a.map((_,i)=>i);
+  for(let k=order.length-1;k>0;k--){ const j=Math.floor(Math.random()*(k+1)); [order[k],order[j]]=[order[j],order[k]]; }
+  order.forEach((i)=>{
+    const txt=qObj.a[i];
     const b=document.createElement("button");
     b.className="optBtn";
     b.textContent = txt;
@@ -578,7 +586,7 @@ function setupLevel(keepScore=true){
   pac.x=1; pac.y=15; pac.px=1; pac.py=15;
   pac.dir={x:1,y:0}; pac.next={x:1,y:0};
 
-  power=false; powerBlink=false;
+  power=false; powerBlink=false; boostUntil=0;
   firewallOnMap=false;
   bonusOnMap=false; bonusDespawnAt=0;
   heartOnMap=false;
@@ -629,7 +637,8 @@ function movePac(){
   if(map[my][mx]===4){
     map[my][mx]=0; bonusOnMap=false;
     score += BONUS_POINTS; joyUntil=Date.now()+1000; mascotEvent("bonus");
-    toast(`⭐ +${BONUS_POINTS}`, 900);
+    boostUntil=Date.now()+BOOST_MS;
+    toast(`⭐ +${BONUS_POINTS} ⚡ Turbo!`, 1400);
     spawnParticles(mx*TILE+TILE/2, my*TILE+TILE/2, 14);
     sCoin();
   }
@@ -712,7 +721,7 @@ function moveGhost(g){
 
 function resetAfterHit(){
   // mantém o que já foi comido (não reconstrói o mapa)
-  power=false; powerBlink=false;
+  power=false; powerBlink=false; boostUntil=0;
   document.getElementById("powerBar").style.width="0%";
 
   stepMs = calcSpeedMs(level, easyMode);
@@ -1489,7 +1498,7 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   const csx=canvas.width/(cam.vis*TILE), csy=canvas.height/(ROWS*TILE);
   if(cam.on){
-    const k0=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/stepMs):1;
+    const k0=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/curStepMs()):1;
     const pxc=(pac.px+(pac.x-pac.px)*k0+0.5)*TILE;
     const tgt=Math.max(0,Math.min(COLS*TILE-cam.vis*TILE, pxc-cam.vis*TILE/2));
     cam.x = cam.snap ? tgt : cam.x+(tgt-cam.x)*0.2; cam.snap=false;
@@ -1542,7 +1551,7 @@ function draw(){
   const frame = Math.floor(t/130) % 4;
 
   // robô
-  const kk=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/stepMs):1;
+  const kk=(running&&!paused)?Math.min(1,(Date.now()-lastStepAt)/curStepMs()):1;
   const lp=(a,b)=>a+(b-a)*kk;
   drawRobot(frame, lp(pac.px,pac.x), lp(pac.py,pac.y));
 
@@ -1626,8 +1635,9 @@ function loop(){
   tick++;
   lastStepAt=Date.now();
   movePac();
+  if(boostOn()) spawnParticles(pac.x*TILE+TILE/2, pac.y*TILE+TILE/2, 3);
   ghosts.forEach(g=>{
-    if(g.scared && (tick%2===0)){ g.px=g.x; g.py=g.y; return; } // mais lento em modo proteção
+    if((g.scared && (tick%2===0)) || (boostOn() && tick%3===0)){ g.px=g.x; g.py=g.y; return; } // mais lento em modo proteção; no turbo os malware andam 2 de cada 3 passos (mesma velocidade de sempre)
     moveGhost(g);
   });
   collide();
@@ -1651,7 +1661,7 @@ function loop(){
   draw();
   clampHUD();
 
-  timer=setTimeout(loop, stepMs);
+  timer=setTimeout(loop, curStepMs());
 }
 
 // ---------- START / GAME OVER ----------
