@@ -498,3 +498,9 @@ html.m-land #panel .mobilePad .dpad{height:clamp(46px,15.5dvh,66px)}
 .factBtn.secondary{background:linear-gradient(180deg,#8b5cf6,#6d3bd8);color:#fff}
 #btnContinue{margin-bottom:10px}
 #resumeInfo{margin-bottom:10px}
+
+/* ===== Contraste (WCAG AA) e pistas que não dependem só da cor ===== */
+.reset,.big.orange{background:linear-gradient(180deg,#b5135f,#a63006);color:#fff8e0}
+.optBtn.good::before{content:"✅ "}
+.optBtn.bad::before{content:"❌ "}
+.optBtn.bad{border-style:dashed}

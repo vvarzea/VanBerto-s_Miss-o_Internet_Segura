@@ -646,7 +646,7 @@ function movePac(){
     map[my][mx]=0; firewallOnMap=false;
     power=true; ghostCombo=100; powerEnd=Date.now()+POWER_TIME;
     $("powerBar").style.width="100%";
-    setStatus("🛡️ Firewall ativada! Come os malware azuis!");
+    setStatus("🛡️ Firewall ativada! Come os malware às riscas!");
     toast("🛡️ Proteção ativada!");
     scareUntil = Date.now() + 1400;
     powerFlashUntil = Date.now() + 900; mascotEvent("shield");
@@ -997,7 +997,9 @@ function drawRobot(frame,x,y){
   ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
   ctx.translate(cx, cy+bobY);
   ctx.scale(sx,sy);
+  ctx.shadowColor="rgba(190,230,255,0.9)"; ctx.shadowBlur=5; // halo claro: o corpo navy não se perde no fundo
   ctx.drawImage(vanTex(key),-d/2,-d/2-0.5,d,d);
+  ctx.shadowBlur=0;
   ctx.restore();
   ctx.imageSmoothingEnabled=false;
 }
@@ -1114,21 +1116,21 @@ function makeVilaoCanvas(kind){
     ctx.fillStyle="rgba(0,0,0,0.20)";
     ctx.beginPath(); ctx.ellipse(cx,cy+22,18,5,0,0,Math.PI*2); ctx.fill();
 
-    // Halo azul exterior
-    ctx.shadowColor="rgba(0,80,220,0.55)"; ctx.shadowBlur=10;
+    // Halo roxo exterior
+    ctx.shadowColor="rgba(150,40,220,0.55)"; ctx.shadowBlur=10;
     ctx.strokeStyle="rgba(255,255,255,0.88)"; ctx.lineWidth=4.5;
     ctx.beginPath(); ctx.arc(cx,cy,23,0,Math.PI*2); ctx.stroke();
     ctx.shadowBlur=0;
     ctx.strokeStyle="rgba(0,0,0,0.28)"; ctx.lineWidth=2;
     ctx.beginPath(); ctx.arc(cx,cy,25,0,Math.PI*2); ctx.stroke();
 
-    // Aura azul elétrica
-    ctx.fillStyle="rgba(50,100,255,0.18)";
+    // Aura roxa elétrica
+    ctx.fillStyle="rgba(170,80,255,0.18)";
     ctx.beginPath(); ctx.arc(cx,cy,28,0,Math.PI*2); ctx.fill();
 
     // Espinhos (8 ao redor) — antes do corpo para ficarem por baixo
-    ctx.fillStyle="#003090";
-    ctx.shadowColor="rgba(0,60,180,0.50)"; ctx.shadowBlur=4;
+    ctx.fillStyle="#4a0a8a";
+    ctx.shadowColor="rgba(90,20,160,0.50)"; ctx.shadowBlur=4;
     for(let si=0;si<8;si++){
       const sa=Math.PI*2*si/8 - Math.PI*0.08;
       const sx1=cx+Math.cos(sa)*20, sy1=cy+Math.sin(sa)*20;
@@ -1139,39 +1141,39 @@ function makeVilaoCanvas(kind){
     }
     ctx.shadowBlur=0;
 
-    // Corpo principal — gradiente azul elétrico
+    // Corpo principal — gradiente roxo elétrico
     const gr=ctx.createRadialGradient(cx-7,cy-7,2,cx,cy,21);
-    gr.addColorStop(0,"#80b0ff");
-    gr.addColorStop(0.30,"#2255ee");
-    gr.addColorStop(0.70,"#0030cc");
-    gr.addColorStop(1,"#001080");
+    gr.addColorStop(0,"#e0b0ff");
+    gr.addColorStop(0.30,"#9b30e8");
+    gr.addColorStop(0.70,"#6a14c0");
+    gr.addColorStop(1,"#34096e");
     ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.fillStyle=gr; ctx.fill();
 
-    // Padrão de circuitos (linhas azuis brilhantes)
-    ctx.strokeStyle="rgba(150,200,255,0.35)"; ctx.lineWidth=1;
+    // Padrão de circuitos (linhas roxas brilhantes)
+    ctx.strokeStyle="rgba(225,185,255,0.35)"; ctx.lineWidth=1;
     ctx.lineCap="round";
     [[cx-6,cy-10,cx-6,cy-3],[cx-6,cy-3,cx+4,cy-3],[cx+4,cy-3,cx+4,cy+5],
      [cx-12,cy+4,cx-4,cy+4],[cx+6,cy+8,cx+12,cy+2]].forEach(([x1,y1,x2,y2])=>{
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     });
     // Nódulos dos circuitos
-    ctx.fillStyle="rgba(180,220,255,0.55)";
+    ctx.fillStyle="rgba(235,205,255,0.55)";
     [[cx-6,cy-3],[cx+4,cy+5],[cx-4,cy+4]].forEach(([nx,ny])=>{
       ctx.beginPath(); ctx.arc(nx,ny,2,0,Math.PI*2); ctx.fill();
     });
 
     // Brilho esférico
-    ctx.fillStyle="rgba(160,200,255,0.38)";
+    ctx.fillStyle="rgba(220,180,255,0.38)";
     ctx.beginPath(); ctx.ellipse(cx-7,cy-8,9,13,Math.PI*0.3,0,Math.PI*2); ctx.fill();
     ctx.fillStyle="rgba(255,255,255,0.22)";
     ctx.beginPath(); ctx.ellipse(cx-9,cy-11,5,7,Math.PI*0.3,0,Math.PI*2); ctx.fill();
 
     // Contorno
-    ctx.strokeStyle="#001580"; ctx.lineWidth=2.5;
+    ctx.strokeStyle="#3a0a80"; ctx.lineWidth=2.5;
     ctx.beginPath(); ctx.arc(cx,cy,21,0,Math.PI*2); ctx.stroke();
 
-    evilEyes(ctx,cx,cy-2,"#0044ff");
-    evilMouth(ctx,cx,cy+10,"#001080", false);
+    evilEyes(ctx,cx,cy-2,"#e070ff");
+    evilMouth(ctx,cx,cy+10,"#34096e", false);
     }
   else {
     const cx=32,cy=30;
@@ -1381,6 +1383,7 @@ function drawHeart(x,y,t){
   ctx.bezierCurveTo(1,-14,8,-14,8,-8);
   ctx.bezierCurveTo(8,-2,0,0,0,6);
   ctx.fill();
+  ctx.strokeStyle="#fff"; ctx.lineWidth=1.8; ctx.lineJoin="round"; ctx.stroke();
   ctx.restore();
 }
 
@@ -1428,6 +1431,9 @@ function drawVilao(kind,x,y,scared,t,id){
     tctx.drawImage(vilTex(kind),0,0);
     tctx.globalCompositeOperation="source-atop"; tctx.globalAlpha=.7;
     tctx.fillStyle=powerBlink?"#e5e7eb":"#60a5fa"; tctx.fillRect(0,0,64,64);
+    // riscas diagonais: o estado "comestível" não depende só da cor
+    tctx.globalAlpha=powerBlink?0.35:0.6; tctx.strokeStyle="#fff"; tctx.lineWidth=4;
+    for(let o=-64;o<64;o+=12){ tctx.beginPath(); tctx.moveTo(o,64); tctx.lineTo(o+64,0); tctx.stroke(); }
     tctx.globalCompositeOperation="source-over"; tctx.globalAlpha=1;
     ctx.drawImage(tmp,px-d/2,py-d/2,d,d);
     // olhos assustados (X) por cima
