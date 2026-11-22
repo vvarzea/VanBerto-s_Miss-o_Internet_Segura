@@ -780,7 +780,7 @@ function calcSpeedMs(level, easyMode){
 }
 
 // os malware saem dos cantos aos poucos (mais tempo para fugir nos primeiros níveis)
-function wakeTick(i){ return tick + Math.max(0,12-2*level) + i*Math.max(2,9-level); }
+function wakeTick(i){ return 0; } // todos arrancam ao mesmo tempo que o VanBerto's
 // nos primeiros níveis o VanBerto's é mais rápido do que os malware (eles falham alguns passos)
 function ghostSkipsStep(){ const m = level<=2 ? 4 : level<=4 ? 5 : level<=6 ? 7 : 0; return m>0 && tick%m===0; }
 function setupLevel(keepScore=true){
@@ -799,9 +799,9 @@ function setupLevel(keepScore=true){
 
   // dificuldade
   // começo mais suave: menos malware nos primeiros níveis
-  const GH_N=[3,3,3,4,4,4,4,4,4,4], GH_E=[2,3,3,3,3,3,3,3,3,3];
+  const GH_N=[3,3,3,4,4,4,4,4,4,4], GH_E=[3,3,3,3,3,3,3,3,3,3];
   const n = (easyMode?GH_E:GH_N)[Math.min(level,10)-1];
-  const spawns=[{x:1,y:1},{x:26,y:1},{x:1,y:17},{x:26,y:17}];
+  const spawns=[{x:1,y:1},{x:26,y:1},{x:26,y:17},{x:1,y:17}]; // os 3 primeiros ficam longe do VanBerto's
 
   ghosts=[];
   for(let i=0;i<n;i++){
@@ -940,8 +940,8 @@ function resetAfterHit(){
   const spawns=[
     {x:1,y:1},
     {x:26,y:1},
-    {x:1,y:17},
-    {x:26,y:17}
+    {x:26,y:17},
+    {x:1,y:17}
   ];
   ghosts.forEach((g,i)=>{
     const s=spawns[i % spawns.length];
