@@ -779,6 +779,10 @@ function calcSpeedMs(level, easyMode){
   return Math.max(95, base - 60 - (level-7)*8); // final mais rápido
 }
 
+// os malware saem dos cantos aos poucos (mais tempo para fugir nos primeiros níveis)
+function wakeTick(i){ return tick + Math.max(0,12-2*level) + i*Math.max(2,9-level); }
+// nos primeiros níveis o VanBerto's é mais rápido do que os malware (eles falham alguns passos)
+function ghostSkipsStep(){ const m = level<=2 ? 4 : level<=4 ? 5 : level<=6 ? 7 : 0; return m>0 && tick%m===0; }
 function setupLevel(keepScore=true){
   buildMap();
 
@@ -795,14 +799,14 @@ function setupLevel(keepScore=true){
 
   // dificuldade
   // começo mais suave: menos malware nos primeiros níveis
-  const GH_N=[2,2,3,3,3,4,4,4,4,4], GH_E=[1,2,2,2,3,3,3,3,3,3];
+  const GH_N=[3,3,3,4,4,4,4,4,4,4], GH_E=[2,3,3,3,3,3,3,3,3,3];
   const n = (easyMode?GH_E:GH_N)[Math.min(level,10)-1];
   const spawns=[{x:1,y:1},{x:26,y:1},{x:1,y:17},{x:26,y:17}];
 
   ghosts=[];
   for(let i=0;i<n;i++){
     const s=spawns[i];
-    ghosts.push({id:i,x:s.x,y:s.y,px:s.x,py:s.y,dir:{x:1,y:0},scared:false,eaten:false});
+    ghosts.push({id:i,x:s.x,y:s.y,px:s.x,py:s.y,dir:{x:1,y:0},scared:false,eaten:false,wake:wakeTick(i)});
   }
   $("ghostsN").textContent=n;
 
@@ -942,7 +946,7 @@ function resetAfterHit(){
   ghosts.forEach((g,i)=>{
     const s=spawns[i % spawns.length];
     g.x=s.x; g.y=s.y; g.px=s.x; g.py=s.y;
-    g.dir={x:1,y:0}; g.scared=false; g.eaten=false;
+    g.dir={x:1,y:0}; g.scared=false; g.eaten=false; g.wake=wakeTick(i);
   });
   saveGame();
 }
@@ -1868,6 +1872,7 @@ function loop(){
   if(boostOn()) spawnParticles(pac.x*TILE+TILE/2, pac.y*TILE+TILE/2, 3);
   ghosts.forEach(g=>{
     if((g.scared && (tick%2===0)) || (boostOn() && tick%3===0)){ g.px=g.x; g.py=g.y; return; } // mais lento em modo proteção; no turbo os malware andam 2 de cada 3 passos (mesma velocidade de sempre)
+    if(!g.eaten && ((g.wake||0)>tick || ghostSkipsStep())){ g.px=g.x; g.py=g.y; return; }
     moveGhost(g);
   });
   collide();
