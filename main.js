@@ -87,7 +87,8 @@ const sPatch = ()=> tone(880, 40, "square", 0.05);
 const sCoin  = ()=> { tone(988,60,"square",0.06); tone(1319,70,"square",0.05,0.06); };
 const sPower = ()=> { slide(440,1320,180,"square",0.06); tone(1760,80,"square",0.04,0.18); };
 const sEat   = ()=> { tone(660,60,"square",0.05); tone(990,60,"square",0.05,0.07); tone(1320,90,"square",0.05,0.14); };
-const sHurt  = ()=> { slide(740,220,220,"square",0.06); tone(196,120,"square",0.04,0.22); };
+// batida cómica: "boing" + trombone triste (wah-wah-wah-waaah)
+const sHurt  = ()=> { slide(180,820,150,"sine",0.07); tone(233,200,"sawtooth",0.04,0.18); tone(220,200,"sawtooth",0.04,0.40); tone(208,200,"sawtooth",0.04,0.62); slide(196,140,520,"sawtooth",0.045,0.84); };
 const sStart = ()=> { tone(523,90,"square",0.05); tone(659,90,"square",0.05,0.10); tone(784,110,"square",0.05,0.20); };
 const sLevel = ()=> { tone(784,90,"square",0.05); tone(988,90,"square",0.05,0.10); tone(1319,120,"square",0.05,0.20); };
 const sOver  = ()=> { tone(523,180,"square",0.05); tone(392,180,"square",0.05,0.18); tone(330,240,"square",0.05,0.36); };
@@ -762,6 +763,9 @@ function collide(){
       g.scared=false; g.eaten=true;
     }else{
       lives--; hurtUntil=Date.now()+1300; sHurt(); clampHUD(); if(lives>0) mascotEvent("hurt");
+      toast(pickOne(["BONK! 💥","AI! 🤕","POOF! 💨","UPS! 🙈","BOING! 🌀","ATCHIM! 🤧"]),1100);
+      spawnParticles(pac.x*TILE+TILE/2, pac.y*TILE+TILE/2, 16);
+      if(!REDUCE_MOTION){ canvas.classList.remove("shake"); void canvas.offsetWidth; canvas.classList.add("shake"); }
       if(lives<=0){ endGame(); return; }
       resetAfterHit();
       return;
@@ -1006,11 +1010,17 @@ function drawRobot(frame,x,y){
   ctx.imageSmoothingEnabled=true; ctx.imageSmoothingQuality="high";
   ctx.translate(cx, cy+bobY);
   ctx.scale(sx,sy);
+  if(now<hurtUntil && !REDUCE_MOTION) ctx.rotate(Math.sin(t/55)*0.3*Math.min(1,(hurtUntil-now)/600)); // tonto
   ctx.shadowColor="rgba(190,230,255,0.9)"; ctx.shadowBlur=5; // halo claro: o corpo navy não se perde no fundo
   ctx.drawImage(vanTex(key),-d/2,-d/2-0.5,d,d);
   ctx.shadowBlur=0;
   ctx.restore();
   ctx.imageSmoothingEnabled=false;
+  if(now<hurtUntil){ // 💫 a andar à roda da cabeça
+    ctx.save(); ctx.font="11px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+    for(let k=0;k<3;k++){ const a=t/160+k*Math.PI*2/3; ctx.fillText("💫", cx+Math.cos(a)*11, cy-d/2+2+Math.sin(a)*3.5); }
+    ctx.restore();
+  }
 }
 
 // ---------- OS "MAUS" E O ESCUDO: os mesmos desenhos do jogo "Missão Cibersegurança" ----------
@@ -1582,6 +1592,18 @@ function draw(){
   }
   drawParticles();
 
+  // aviso (toast) em forma de balão no topo do ecrã de jogo — antes era guardado mas nunca desenhado
+  { const left=toastUntil-Date.now();
+    if(toastText && left>0){
+      const a=Math.min(1,left/250), cxm=cam.x+cam.vis*TILE/2, rise=(1-a)*6;
+      ctx.save(); ctx.globalAlpha=a; ctx.font='800 20px "Baloo 2","Nunito",sans-serif'; ctx.textAlign="center"; ctx.textBaseline="middle";
+      const w=ctx.measureText(toastText).width+28, h=32, x=cxm-w/2, y=TILE*0.9-rise;
+      ctx.fillStyle="rgba(15,5,37,0.88)"; ctx.strokeStyle="#ec1e79"; ctx.lineWidth=2.5;
+      roundRect(ctx,x,y,w,h,14,true,true);
+      ctx.fillStyle="#fff8e0"; ctx.fillText(toastText,cxm,y+h/2+1);
+      ctx.restore();
+    } }
+
   // câmara com zoom: setas nas margens a avisar de malware que está fora de vista
   if(cam.on){
     const L=cam.x, R=cam.x+cam.vis*TILE;
@@ -2065,7 +2087,7 @@ function mascotEvent(type){
     case "eat":    mascotCheer(800);  mascotSay(pickOne(["Apanhei-te, malware!","Fora daqui! 🦠"]),1400); break;
     case "hurt":
       MASC.sadUntil=now+1300; MASC.shakeUntil=now+600;
-      mascotSay(pickOne(["Ai! Fui infetado!","Cuidado com o malware!"]),1500); break;
+      mascotSay(lives===1 ? "Última vida! Foco! 👀" : pickOne(["Ai! Fui infetado! 🤒","Estou a ver estrelas! 💫","Isso fez cócegas! 😵","Preciso de um antivírus! 🛡️","Ups! Escorreguei! 🍌","Esse malware não tem maneiras!"]),1700); break;
     case "level":  mascotCheer(1600); mascotSay("Nível "+level+"! 🚀",1800); break;
     case "win":    mascotCheer(8000); mascotSay("Missão cumprida! 🏆",5000); break;
     case "over":   MASC.sadUntil=now+600000; MASC.shakeUntil=now+600; mascotSay("Oh não… tenta outra vez!",4000); break;
